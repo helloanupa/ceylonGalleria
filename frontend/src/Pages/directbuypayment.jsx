@@ -6,8 +6,8 @@ import Footer from "../components/Footer";
 
 // Initialize Supabase client
 const supabase = createClient(
-  "https://cejlwbqbvfvrtcgghfbt.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNlamx3YnFidmZ2cnRjZ2doZmJ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY4MjY3MTQsImV4cCI6MjA3MjQwMjcxNH0.WFpD0Ke6j980I6SEAMtvpm-PZFTNUbxTZoqu6j1OToc"
+  "https://usqyksnfpxftkpqkkguo.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzcXlrc25mcHhmdGtwcWtrZ3VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAzNTkwNTgsImV4cCI6MjA3NTkzNTA1OH0.q5VI7dITm8wyVkYj0dw-kvoc48cVWkbHKk-isSmlZuc"
 );
 
 function Payment() {
@@ -22,8 +22,6 @@ function Payment() {
 
   const [paymentSubmitted, setPaymentSubmitted] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [receiptFile, setReceiptFile] = useState(null);
-  const [receiptUrl, setReceiptUrl] = useState("");
   const [agreed, setAgreed] = useState(false);
   const [deliveryOption, setDeliveryOption] = useState("delivery");
   const [customerInfo, setCustomerInfo] = useState({
@@ -36,6 +34,7 @@ function Payment() {
   const [copiedField, setCopiedField] = useState("");
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);   // File object
 
   // If no art data is provided
   if (!artData) {
@@ -115,24 +114,49 @@ function Payment() {
   };
   const availableDates = generateAvailableDates();
 
-  const handleFileUpload = async (event) => {
-    const url = event.target.value;
-    setReceiptUrl(url);
-    setError(null);
+  // Handle file selection (image or PDF)
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-    // ✅ Keep: validate receipt URL format only
-    try {
-      new URL(url); // throws if invalid
-      setReceiptUrl(url);
-    } catch {
-      setError(
-        "Please enter a valid URL (e.g., https://example.com/receipt.jpg)"
+    // Client-side validation
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp", "application/pdf"];
+    if (!allowedTypes.includes(file.type)) {
+      setError("Only JPEG, PNG, GIF, WebP or PDF files are allowed.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) { // 5 MB limit
+      setError("File size must be ≤ 5 MB.");
+      return;
+    }
+
+    setSelectedFile(file);
+    setError(null);
+  };
+
+  // Upload helper
+  const uploadReceiptToSupabase = async (file) => {
+    const ext = file.name.split(".").pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
+
+    const { data, error } = await supabase.storage
+      .from("images") // Your bucket name
+      .upload(`public/${fileName}`, file, {
+        cacheControl: "3600",
+        upsert: false,
+      });
+
+    if (error) {
+      console.error("Supabase upload error:", error);
+      throw new Error(
+        error.message.includes("row-level security")
+          ? "Upload blocked by Supabase storage policy. Contact admin."
+          : `Upload failed: ${error.message}`
       );
     }
 
-    /*
-    // File upload logic (kept commented as in your version)
-    */
+    const { data: { publicUrl } } = supabase.storage.from("images").getPublicUrl(`public/${fileName}`);
+    return publicUrl;
   };
 
   const handleCustomerInfoChange = (field, value) => {
@@ -142,7 +166,7 @@ function Payment() {
     }));
   };
 
-  // put this helper above handleSubmit (or outside the component)
+  // Helper for price parsing
   function getNumericPrice(price) {
     if (price == null) return NaN;
     if (typeof price === "number") return price;
@@ -179,29 +203,28 @@ function Payment() {
     }
   };
 
-  /* ❌ Commented: phone validation and test logs
-  const validatePhoneNumber = (phone) => {
-    const phoneRegex = /^07\d{8}$/; // 07 + 8 digits
-    return phoneRegex.test(phone);
-  };
-
-  console.log(validatePhoneNumber("0771234567")); // ✅ true
-  console.log(validatePhoneNumber("071234567")); // ❌ false (only 9 digits)
-  console.log(validatePhoneNumber("+94771234567")); // ❌ false (has +94)
-  */
-
   const handleSubmit = async () => {
     setError(null);
     setIsLoading(true);
 
-    // ✅ only require a valid receipt URL per your request
-    if (!receiptUrl) {
-      setError("Please provide a valid payment receipt URL.");
+    // Validation - require file
+    if (!selectedFile) {
+      setError("Please upload a payment receipt (image or PDF).");
       setIsLoading(false);
       return;
     }
 
-    // ✅ robust price parsing
+    // Upload file
+    let finalReceiptUrl;
+    try {
+      finalReceiptUrl = await uploadReceiptToSupabase(selectedFile);
+    } catch (uploadErr) {
+      setError(uploadErr.message);
+      setIsLoading(false);
+      return;
+    }
+
+    // Robust price parsing
     const totalAmount = getNumericPrice(artData?.price);
     if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
       setError("Invalid price format. Please contact support.");
@@ -219,9 +242,8 @@ function Payment() {
           ? (customerInfo.address || "").trim()
           : galleryDetails.address,
       phoneNumber: customerInfo.phone || "",
-      paymentReceipt: receiptUrl,
+      paymentReceipt: finalReceiptUrl,
       status: "Payment Pending",
-      // send as a number (or use String(totalAmount) if your API expects a string)
       totalAmount,
     };
 
@@ -594,22 +616,37 @@ function Payment() {
                   </div>
                 </div>
 
-                {/* Receipt URL Input */}
+                {/* Receipt Upload Section */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Payment Receipt URL *
+                    Payment Receipt (Image / PDF) *
                   </label>
+
+                  {/* Preview for images */}
+                  {selectedFile && selectedFile.type.startsWith("image/") && (
+                    <img
+                      src={URL.createObjectURL(selectedFile)}
+                      alt="Receipt preview"
+                      className="mt-2 max-w-full h-48 object-contain border rounded"
+                    />
+                  )}
+                  {selectedFile && selectedFile.type === "application/pdf" && (
+                    <p className="mt-2 text-sm text-gray-600">
+                      Selected PDF: {selectedFile.name}
+                    </p>
+                  )}
+
                   <input
-                    type="url"
-                    value={receiptUrl}
-                    onChange={handleFileUpload}
-                    placeholder="Enter receipt URL (e.g., https://example.com/receipt.jpg)"
-                    className="w-full px-4 py-2 border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-black"
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={handleFileChange}
+                    className="w-full mt-2 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:bg-black file:text-white hover:file:bg-gray-800"
                     disabled={isLoading}
                   />
-                  {receiptUrl && !error && (
+
+                  {selectedFile && !error && (
                     <p className="mt-2 text-sm text-green-600">
-                      ✓ Receipt URL provided
+                      Receipt ready
                     </p>
                   )}
                 </div>
@@ -697,10 +734,9 @@ function Payment() {
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  // ✅ Only gate on loading and receipt URL presence
-                  disabled={isLoading || !receiptUrl}
+                  disabled={isLoading || !selectedFile || !agreed}
                   className={`w-full py-3 font-medium uppercase tracking-wide text-white transition-colors ${
-                    isLoading || !receiptUrl
+                    isLoading || !selectedFile || !agreed
                       ? "bg-gray-400 cursor-not-allowed"
                       : "bg-black hover:bg-gray-800"
                   }`}
