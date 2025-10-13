@@ -1,4 +1,3 @@
-// src/pages/ExhibitionManagement.jsx
 import React, { useState, useEffect } from "react";
 import AdminSidebar from "../components/AdminSlidebar";
 import jsPDF from "jspdf";
@@ -7,10 +6,11 @@ import autoTable from "jspdf-autotable";
 const statusColors = {
   upcoming: "bg-blue-500",
   showing: "bg-green-500",
-  past: "bg-red-500",
+  // past status removed
 };
 
-const STATUS_OPTIONS = ["upcoming", "showing", "past"];
+// Updated to remove 'past'
+const STATUS_OPTIONS = ["upcoming", "showing"];
 
 function ExhibitionManagement() {
   const [exhibitions, setExhibitions] = useState([]);
@@ -22,6 +22,11 @@ function ExhibitionManagement() {
   const [showDescription, setShowDescription] = useState(null);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+
+  // Set document title on mount
+  useEffect(() => {
+    document.title = "Admin | Exhibition Management";
+  }, []);
 
   const API_BASE = "http://localhost:5000/api/exhibitions";
 
@@ -48,14 +53,12 @@ function ExhibitionManagement() {
     }
   };
 
-  const filteredExhibitions = (exhibitions || []).filter(
-    (ex) =>
-      ex &&
-      Object.values(ex)
-        .join(" ")
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase())
-  );
+  const filteredExhibitions = (exhibitions || []).filter((ex) => {
+    const query = searchQuery.toLowerCase();
+    const titleMatch = ex.title?.toLowerCase().startsWith(query);
+    const venueMatch = ex.venue?.toLowerCase().includes(query);
+    return titleMatch || venueMatch;
+  });
 
   const handleDelete = (ex) => setDeleteTarget(ex);
 
@@ -63,7 +66,8 @@ function ExhibitionManagement() {
     try {
       setLoading(true);
       await fetch(`${API_BASE}/${deleteTarget._id}`, { method: "DELETE" });
-      window.location.reload();
+      loadExhibitions(); // Refresh data after delete
+      setDeleteTarget(null);
     } catch (err) {
       console.error(err);
     } finally {
@@ -83,14 +87,19 @@ function ExhibitionManagement() {
       endtime: "",
       venue: "",
       image: "",
-      status: "upcoming", // Changed back to "upcoming"
+      status: "upcoming", // Default to upcoming
     });
     setErrors({});
     setAddModal(true);
   };
 
   const handleEditClick = (ex) => {
-    setEditData({ ...ex });
+    // If exhibition has 'past' status, change it to 'showing' for backward compatibility
+    const updatedEx = { ...ex };
+    if (updatedEx.status === 'past') {
+      updatedEx.status = 'showing';
+    }
+    setEditData(updatedEx);
     setErrors({});
     setEditModal(true);
   };
@@ -112,6 +121,7 @@ function ExhibitionManagement() {
 
   const saveAdd = async () => {
     if (!validateFields()) return;
+    
     try {
       setLoading(true);
       const res = await fetch(API_BASE, {
@@ -119,11 +129,10 @@ function ExhibitionManagement() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editData),
       });
-      const data = await res.json();
-      setExhibitions((prev) => [data.exhibition || data, ...prev]);
+      
+      await loadExhibitions(); // Refresh data after add
       setAddModal(false);
       setErrors({});
-      window.location.reload();
     } catch (err) {
       console.error("Add exhibition error:", err);
     } finally {
@@ -133,21 +142,26 @@ function ExhibitionManagement() {
 
   const saveEdit = async () => {
     if (!validateFields()) return;
+    
     try {
       setLoading(true);
-      const res = await fetch(`${API_BASE}/${editData._id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editData),
-      });
-      const data = await res.json();
-      setExhibitions((prev) =>
-        prev.map((ex) => (ex._id === data.exhibition._id ? data.exhibition : ex))
-      );
+      // Always try the API call, even if it might fail
+      try {
+        await fetch(`${API_BASE}/${editData._id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(editData),
+        });
+      } catch (err) {
+        console.error("API call failed:", err);
+      }
+      
+      // Always refresh the data to ensure UI is updated
+      await loadExhibitions();
       setEditModal(false);
       setErrors({});
     } catch (err) {
-      console.error(err);
+      console.error("Update error:", err);
     } finally {
       setLoading(false);
     }
@@ -156,17 +170,17 @@ function ExhibitionManagement() {
   const generatePDF = () => {
     const doc = new jsPDF();
     const now = new Date();
-    doc.setFontSize(14);
-    doc.text(
-      `SFG Gallery - Exhibition Report`,
-      14,
-      15
-    );
+
+    doc.setFontSize(20);
+    doc.text("CEYLON GALLERIA", 14, 20);
+    doc.setFontSize(12);
+    doc.text("Exhibition Report", 14, 28);
+
     doc.setFontSize(10);
-    doc.text(`Generated: ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`, 14, 22);
+    doc.text(`Report Generated On: ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`, 14, 34);
 
     autoTable(doc, {
-      startY: 28,
+      startY: 40,
       head: [["Title", "Start", "End", "Status", "Venue", "Description"]],
       body: exhibitions.map((ex) => [
         ex.title || "-",
@@ -174,13 +188,22 @@ function ExhibitionManagement() {
         ex.enddate ? new Date(ex.enddate).toLocaleDateString() : "-",
         ex.status || "-",
         ex.venue || "-",
-        ex.description || "-",
+        ex.description?.substring(0, 100) + (ex.description?.length > 100 ? "..." : "") || "-",
       ]),
-      styles: { cellWidth: 'wrap', fontSize: 9, overflow: 'linebreak' },
-      columnStyles: { 5: { cellWidth: 40 } }, // Shrink description column
+      styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+      headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [240, 240, 240] },
+      columnStyles: {
+        0: { cellWidth: 30 }, // Title
+        1: { cellWidth: 20 }, // Start
+        2: { cellWidth: 20 }, // End
+        3: { cellWidth: 15 }, // Status
+        4: { cellWidth: 30 }, // Venue
+        5: { cellWidth: 60 }, // Description
+      },
     });
 
-    doc.save("Exhibition_Report.pdf");
+    doc.save(`Exhibition_Report_${now.toISOString().split('T')[0]}.pdf`);
   };
 
   return (
@@ -247,7 +270,11 @@ function ExhibitionManagement() {
               ))}
               {filteredExhibitions.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center py-4 text-gray-500">No exhibitions found.</td>
+                  <td colSpan={8} className="text-center py-4 text-gray-500">
+                    {searchQuery
+                      ? "No exhibitions found for your search."
+                      : "No exhibitions found."}
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -361,21 +388,47 @@ function ExhibitionManagement() {
                 {/* Status */}
                 <div>
                   <label>Status</label>
-                  <select value={editData.status || "upcoming"} onChange={(e) => handleEditChange("status", e.target.value)} className="w-full px-3 py-2 border rounded">
-                    {STATUS_OPTIONS.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                  <select 
+                    value={editData.status || "upcoming"} 
+                    onChange={(e) => handleEditChange("status", e.target.value)} 
+                    className="w-full px-3 py-2 border rounded"
+                  >
+                    {STATUS_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>{opt}</option>
+                    ))}
                   </select>
                 </div>
 
                 {/* Description */}
                 <div>
                   <label>Description</label>
-                  <textarea value={editData.description || ""} onChange={(e) => handleEditChange("description", e.target.value)} className="w-full px-3 py-2 border rounded" rows={4} />
+                  <textarea 
+                    value={editData.description || ""} 
+                    onChange={(e) => handleEditChange("description", e.target.value)} 
+                    className="w-full px-3 py-2 border rounded" 
+                    rows={4} 
+                  />
                 </div>
               </div>
 
               <div className="flex justify-end mt-4 space-x-2">
-                <button onClick={() => { addModal ? setAddModal(false) : setEditModal(false); setErrors({}); }} className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400" disabled={loading}>Cancel</button>
-                <button onClick={addModal ? saveAdd : saveEdit} className="px-4 py-2 rounded bg-black text-white hover:bg-gray-800" disabled={loading}>{loading ? "Saving..." : "Save"}</button>
+                <button 
+                  onClick={() => { 
+                    addModal ? setAddModal(false) : setEditModal(false); 
+                    setErrors({}); 
+                  }} 
+                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400" 
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button 
+                  onClick={addModal ? saveAdd : saveEdit} 
+                  className="px-4 py-2 rounded bg-black text-white hover:bg-gray-800" 
+                  disabled={loading}
+                >
+                  {loading ? "Saving..." : "Save"}
+                </button>
               </div>
             </div>
           </div>

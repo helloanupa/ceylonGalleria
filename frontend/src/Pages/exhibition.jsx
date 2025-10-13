@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 
@@ -6,21 +7,26 @@ function Exhibitions() {
   const [exhibitions, setExhibitions] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Badge colors based on status
+  // Set document title on mount
+  useEffect(() => {
+    document.title = "Ceylon Galleria | Exhibitions";
+  }, []);
+
   const statusColors = {
     upcoming: "bg-blue-500",
-    current: "bg-green-500",
-    ended: "bg-red-500",
+    showing: "bg-green-500",
   };
 
   const fetchExhibitions = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:5000/api/exhibitions");
+      const timestamp = new Date().getTime();
+      const res = await fetch(
+        `http://localhost:5000/api/exhibitions?t=${timestamp}`
+      );
       if (!res.ok) throw new Error("Failed to fetch exhibitions");
       const data = await res.json();
 
-      // Extract array from object
       const exhibitionsArray = Array.isArray(data.exhibitions)
         ? data.exhibitions
         : [];
@@ -32,7 +38,7 @@ function Exhibitions() {
         date: `${new Date(ex.startdate).toLocaleDateString()} - ${new Date(
           ex.enddate
         ).toLocaleDateString()}`,
-        status: ex.status,
+        status: ex.status === "past" ? "showing" : ex.status,
         description: ex.description,
         image: ex.image,
       }));
@@ -47,6 +53,8 @@ function Exhibitions() {
 
   useEffect(() => {
     fetchExhibitions();
+    const interval = setInterval(fetchExhibitions, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   return (
@@ -62,42 +70,49 @@ function Exhibitions() {
           <p className="text-center text-gray-500">Loading exhibitions...</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {exhibitions.map((exhibit) => (
-              <article
-                key={exhibit.id}
-                className="relative bg-white shadow-md overflow-hidden border border-gray-200 hover:shadow-xl transition"
-              >
-                {/* Status Badge */}
-                <span
-                  className={`absolute top-0 right-0 text-xs font-medium text-white px-3 py-1 shadow-md ${
-                    statusColors[exhibit.status] || "bg-gray-400"
-                  }`}
+            <AnimatePresence>
+              {exhibitions.map((exhibit) => (
+                <motion.article
+                  key={exhibit.id}
+                  layout
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.3 }}
+                  className="relative bg-white shadow-md overflow-hidden border border-gray-200 hover:shadow-xl transition cursor-pointer"
                 >
-                  {exhibit.status.charAt(0).toUpperCase() +
-                    exhibit.status.slice(1)}
-                </span>
+                  {/* Status Badge */}
+                  <span
+                    className={`absolute top-0 right-0 text-xs font-medium text-white px-3 py-1 shadow-md ${
+                      statusColors[exhibit.status] || "bg-gray-400"
+                    }`}
+                  >
+                    {exhibit.status.charAt(0).toUpperCase() +
+                      exhibit.status.slice(1)}
+                  </span>
 
-                {/* Image */}
-                <img
-                  src={exhibit.image}
-                  alt={`${exhibit.title} exhibition image`}
-                  className="w-full h-56 object-cover"
-                  loading="lazy"
-                />
+                  {/* Image */}
+                  <img
+                    src={exhibit.image || "https://via.placeholder.com/400"}
+                    alt={`${exhibit.title} exhibition image`}
+                    className="w-full h-56 object-cover"
+                    loading="lazy"
+                  />
 
-                {/* Content */}
-                <div className="p-6">
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                    {exhibit.title}
-                  </h3>
-                  <p className="text-gray-500 text-sm mb-1">
-                    📍 {exhibit.location}
-                  </p>
-                  <p className="text-gray-600 text-sm mb-2">{exhibit.date}</p>
-                  <p className="text-gray-700 text-sm">{exhibit.description}</p>
-                </div>
-              </article>
-            ))}
+                  {/* Content */}
+                  <div className="p-6">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      {exhibit.title}
+                    </h3>
+                    <p className="text-gray-500 text-sm mb-1">
+                      📍 {exhibit.location}
+                    </p>
+                    <p className="text-gray-600 text-sm mb-2">{exhibit.date}</p>
+                    <p className="text-gray-700 text-sm">{exhibit.description}</p>
+                  </div>
+                </motion.article>
+              ))}
+            </AnimatePresence>
           </div>
         )}
       </main>

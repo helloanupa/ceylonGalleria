@@ -9,4 +9,13 @@ router.put("/profile/:id", userController.updateProfile);
 router.delete("/profile/:id", userController.deleteProfile);
 router.get("/all", userController.getAllUsers);
 
+router.put("/admin/:id", userController.updateUserByAdmin);
+router.delete("/admin/:id", userController.deleteUserByAdmin);
+
+// userRoutes.js
+router.post("/forgot-password", userController.forgotPassword);
+router.post("/reset-password/:token", userController.resetPassword);
+
+ 
+
 module.exports = router;

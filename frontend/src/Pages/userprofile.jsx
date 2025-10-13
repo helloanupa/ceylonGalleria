@@ -13,6 +13,11 @@ function Profile() {
 
   const user = JSON.parse(localStorage.getItem("user"));
 
+  // This is the new code to change the tab title
+  useEffect(() => {
+    document.title = "My Profile";
+  }, []);
+
   useEffect(() => {
     const fetchProfile = async () => {
       if (!user) return;

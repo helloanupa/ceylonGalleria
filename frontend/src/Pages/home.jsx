@@ -14,6 +14,11 @@ function HomePage() {
   const scrollContainerRef = useRef(null);
   const slidesRef = useRef([]);
 
+  // Set document title on mount
+  useEffect(() => {
+    document.title = "Ceylon Galleria | Home";
+  }, []);
+
   useEffect(() => {
     const scrollContainer = scrollContainerRef.current;
     const slides = slidesRef.current;
@@ -76,40 +81,56 @@ function HomePage() {
       <Header />
 
       <div
-        className="h-screen overflow-y-scroll scroll-snap-y-mandatory scroll-smooth pt-20"
+        className="h-screen overflow-y-scroll scroll-smooth scroll-snap-y-mandatory pt-20"
         ref={scrollContainerRef}
       >
-        <div ref={(el) => (slidesRef.current[0] = el)}>
+        {/* Slide 1 */}
+        <div
+          ref={(el) => (slidesRef.current[0] = el)}
+          className={`transition-all duration-700 ease-in-out ${
+            currentSlide === 0 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"
+          }`}
+        >
           <Slide
             title="MOUNTAIN IS MOUNTAIN 02"
             subtitle="14.5 × 17 cm · Mixed Media on Paper · 2025 · [ Now Showcasing ]"
             background={myArt}
-            containerClass="h-screen flex items-end justify-start p-10 bg-cover bg-center scroll-snap-start"
-            titleClass="text-white text-4xl font-semibold uppercase tracking-widest mb-2"
-            subtitleClass="text-gray-200 text-lg font-light tracking-wide"
+            containerClass="h-screen flex items-end justify-start p-10 bg-cover bg-center scroll-snap-start transform transition-transform duration-700 ease-in-out hover:scale-105"
+            titleClass="text-white text-4xl font-semibold uppercase tracking-widest mb-2 transition-opacity duration-700"
+            subtitleClass="text-gray-200 text-lg font-light tracking-wide transition-opacity duration-700"
           />
         </div>
 
-        <div ref={(el) => (slidesRef.current[1] = el)}>
+        {/* Slide 2 */}
+        <div
+          ref={(el) => (slidesRef.current[1] = el)}
+          className={`transition-all duration-700 ease-in-out ${
+            currentSlide === 1 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"
+          }`}
+        >
           <Slide
             title="Please Don’t Let Big Die"
             subtitle="The struggle of Ceylon’s giants against human encroachment · Pigment Pen on Paper · 2025 · [ Now Showcasing ]"
             background={image2}
-            containerClass="h-screen flex items-end justify-start p-10 bg-cover bg-center scroll-snap-start"
-            titleClass="text-white text-4xl font-semibold uppercase tracking-widest mb-2"
-            subtitleClass="text-gray-200 text-lg font-light tracking-wide"
+            containerClass="h-screen flex items-end justify-start p-10 bg-cover bg-center scroll-snap-start transform transition-transform duration-700 ease-in-out hover:scale-105"
+            titleClass="text-white text-4xl font-semibold uppercase tracking-widest mb-2 transition-opacity duration-700"
+            subtitleClass="text-gray-200 text-lg font-light tracking-wide transition-opacity duration-700"
           />
         </div>
 
-        <div ref={(el) => (slidesRef.current[2] = el)}>
+        {/* News Section */}
+        <div
+          ref={(el) => (slidesRef.current[2] = el)}
+          className={`transition-all duration-700 ease-in-out ${
+            currentSlide === 2 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-10"
+          }`}
+        >
           <NewsSection containerClass="scroll-snap-start bg-white p-12 sm:p-6" />
         </div>
 
-        <div ref={(el) => (slidesRef.current[3] = el)}>
-          <Footer containerClass="min-h-[30vh] scroll-snap-start bg-white flex flex-col justify-center items-center p-8 text-center" />
-        </div>
       </div>
 
+      {/* Dots Navigation */}
       <Dots
         current={currentSlide}
         setSlide={(i) => {
@@ -121,9 +142,12 @@ function HomePage() {
           });
           setCurrentSlide(i);
         }}
+        className="transition-colors duration-500 ease-in-out"
       />
 
       <ScrollIndicator />
+
+      <Footer />
     </>
   );
 }

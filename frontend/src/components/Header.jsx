@@ -78,13 +78,7 @@ function Header() {
             >
               ABOUT JANITH
             </Link>
-            <Link
-              to="/contact"
-              className="text-sm uppercase tracking-wide text-gray-700 hover:text-black transition-colors"
-            >
-              CONTACT
-            </Link>
-
+ 
             {user ? (
               <div className="flex items-center space-x-4">
                 <Link to="/userprofile">
@@ -165,13 +159,7 @@ function Header() {
               >
                 ABOUT JANITH
               </Link>
-              <Link
-                to="/contact"
-                onClick={() => setShowMobileMenu(false)}
-                className="text-sm uppercase tracking-wide text-gray-700 hover:text-black transition-colors"
-              >
-                CONTACT
-              </Link>
+
 
               <hr className="border-gray-200" />
               {user ? (

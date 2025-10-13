@@ -34,6 +34,15 @@ function AdminArtManagement() {
   const [addModal, setAddModal] = useState(false);
   const [editData, setEditData] = useState({});
   const [loading, setLoading] = useState(false);
+  const [sortConfig, setSortConfig] = useState({
+    key: null,
+    direction: 'asc'
+  });
+
+  // Set document title on mount
+  useEffect(() => {
+    document.title = "Admin | Art Management";
+  }, []);
 
   const generateArtCode = () => {
     const lastCode =
@@ -67,16 +76,57 @@ function AdminArtManagement() {
     }
   };
 
-  // Validation function
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortedArtworks = (artworksToSort) => {
+    if (!sortConfig.key) return artworksToSort;
+
+    return [...artworksToSort].sort((a, b) => {
+      let aValue = a[sortConfig.key];
+      let bValue = b[sortConfig.key];
+
+      if (sortConfig.key === 'artCode') {
+        aValue = parseInt(a.artCode.replace('ART', '')) || 0;
+        bValue = parseInt(b.artCode.replace('ART', '')) || 0;
+      }
+      
+      if (sortConfig.key === 'price') {
+        aValue = parseFloat(aValue) || 0;
+        bValue = parseFloat(bValue) || 0;
+      }
+
+      if (aValue < bValue) {
+        return sortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+  };
+
+  const getSortIcon = (columnKey) => {
+    if (sortConfig.key !== columnKey) {
+      return <span className="text-gray-400">↕</span>;
+    }
+    return sortConfig.direction === 'asc' 
+      ? <span className="text-black">↑</span> 
+      : <span className="text-black">↓</span>;
+  };
+
   const validateArtData = (data) => {
     const errors = {};
 
-    // Required fields
     if (!data.artCode?.trim()) errors.artCode = "Art Code is required";
     if (!data.title?.trim()) errors.title = "Title is required";
     if (!data.artist?.trim()) errors.artist = "Artist is required";
     
-    // Price validation - must be positive number
     if (data.price !== undefined && data.price !== "") {
       const priceNum = parseFloat(data.price);
       if (isNaN(priceNum) || priceNum < 0) {
@@ -84,7 +134,6 @@ function AdminArtManagement() {
       }
     }
 
-    // Dimensions validation - should follow format like "24x36 inches"
     if (data.dimensions && data.dimensions.trim()) {
       const dimensionPattern = /^\d+(\.\d+)?\s*[x×]\s*\d+(\.\d+)?\s*(inches|cm|mm|feet|in)$/i;
       if (!dimensionPattern.test(data.dimensions.trim())) {
@@ -92,7 +141,6 @@ function AdminArtManagement() {
       }
     }
 
-    // URL validation for image
     if (data.image && data.image.trim()) {
       try {
         new URL(data.image);
@@ -101,22 +149,18 @@ function AdminArtManagement() {
       }
     }
 
-    // Status validation
     if (!STATUS_OPTIONS.includes(data.status)) {
       errors.status = "Invalid status";
     }
 
-    // Category validation
     if (!CATEGORY_OPTIONS.includes(data.category)) {
       errors.category = "Invalid category";
     }
 
-    // Bid validation - if status is "Bid", bidEndDate and bidEndTime are required
     if (data.status === "Bid") {
       if (!data.bidEndDate) errors.bidEndDate = "Bid end date is required for bidding items";
       if (!data.bidEndTime) errors.bidEndTime = "Bid end time is required for bidding items";
       
-      // Check if bid end date is in the future
       if (data.bidEndDate && data.bidEndTime) {
         const bidEndDateTime = new Date(`${data.bidEndDate}T${data.bidEndTime}`);
         if (bidEndDateTime <= new Date()) {
@@ -124,7 +168,6 @@ function AdminArtManagement() {
         }
       }
     } else {
-      // Clear bid fields if status is not "Bid"
       data.bidEndDate = "";
       data.bidEndTime = "";
     }
@@ -132,12 +175,14 @@ function AdminArtManagement() {
     return errors;
   };
 
-  const filteredArts = artworks.filter((art) =>
-    Object.values(art).some(
-      (val) =>
-        val && val.toString().toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  );
+  const filteredArts = artworks.filter((art) => {
+    const query = searchQuery.toLowerCase();
+    const titleMatch = art.title.toLowerCase().startsWith(query);
+    const codeMatch = art.artCode.toLowerCase().includes(query);
+    return titleMatch || codeMatch;
+  });
+
+  const sortedAndFilteredArts = getSortedArtworks(filteredArts);
 
   const handleDelete = (art) => {
     if (art.status === "Not Listed") setDeleteTarget(art);
@@ -193,7 +238,6 @@ function AdminArtManagement() {
     try {
       setLoading(true);
       
-      // Validate data
       const errors = validateArtData(data);
       if (Object.keys(errors).length > 0) {
         const errorMessages = Object.values(errors).join('\n');
@@ -201,7 +245,6 @@ function AdminArtManagement() {
         return;
       }
 
-      // Convert price to number if provided
       const processedData = {
         ...data,
         price: data.price ? parseFloat(data.price) : undefined,
@@ -222,7 +265,6 @@ function AdminArtManagement() {
       const newData = await res.json();
       setArtworks((prev) => [newData, ...prev]);
 
-      // Create bidding session if status is "Bid"
       if (newData.status === "Bid") {
         try {
           const sessionBody = {
@@ -259,7 +301,6 @@ function AdminArtManagement() {
     try {
       setLoading(true);
       
-      // Validate data
       const errors = validateArtData(data);
       if (Object.keys(errors).length > 0) {
         const errorMessages = Object.values(errors).join('\n');
@@ -267,7 +308,6 @@ function AdminArtManagement() {
         return;
       }
 
-      // Convert price to number if provided
       const processedData = {
         ...data,
         price: data.price ? parseFloat(data.price) : undefined,
@@ -324,7 +364,6 @@ function AdminArtManagement() {
       setEditModal(false);
       alert("Artwork updated successfully!");
       
-      // Reload artworks to ensure we have the latest data
       await loadArtworks();
     } catch (error) {
       console.error("Update artwork error:", error);
@@ -335,10 +374,9 @@ function AdminArtManagement() {
   };
 
   const generatePDF = () => {
-    const doc = new jsPDF();
+    const doc = new jsPDF({ orientation: "landscape" });
     const now = new Date();
     
-    // Header
     doc.setFontSize(16);
     doc.text("SFG Gallery - Art Report", 14, 20);
     doc.setFontSize(10);
@@ -375,7 +413,7 @@ function AdminArtManagement() {
         a.description || "-",
       ]),
       styles: { 
-        cellWidth: 'wrap', 
+        cellWidth: 'auto', 
         fontSize: 8, 
         overflow: 'linebreak',
         halign: 'left'
@@ -384,26 +422,12 @@ function AdminArtManagement() {
         fontSize: 9,
         fillColor: [60, 60, 60],
         textColor: [255, 255, 255]
-      },
-      columnStyles: {
-        0: { cellWidth: 15 },
-        1: { cellWidth: 20 },
-        2: { cellWidth: 18 },
-        3: { cellWidth: 15 },
-        4: { cellWidth: 18 },
-        5: { cellWidth: 15 },
-        6: { cellWidth: 15 },
-        7: { cellWidth: 20 },
-        8: { cellWidth: 15 },
-        9: { cellWidth: 18 },
-        10: { cellWidth: 25 }
       }
     });
     
     doc.save("Art_Report.pdf");
   };
 
-  // Enhanced ArtModal with validation
   const ArtModal = ({ isAdd = false, initialData, onSave, onClose }) => {
     const [modalData, setModalData] = useState(() => ({
       artCode: "",
@@ -444,7 +468,6 @@ function AdminArtManagement() {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
         <div className="bg-white rounded-lg shadow-2xl max-w-2xl w-full max-h-[95vh] flex flex-col">
-          {/* Header */}
           <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50 rounded-t-lg flex-shrink-0">
             <h2 className="text-xl font-bold text-gray-800">
               {isAdd ? "Add New Artwork" : "Edit Artwork"}
@@ -457,10 +480,8 @@ function AdminArtManagement() {
             </button>
           </div>
 
-          {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto px-6 py-4">
             <div className="space-y-4">
-              {/* Art Code */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Art Code *
@@ -476,7 +497,6 @@ function AdminArtManagement() {
                 )}
               </div>
 
-              {/* Title */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Title *
@@ -498,7 +518,6 @@ function AdminArtManagement() {
                 )}
               </div>
 
-              {/* Artist */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Artist *
@@ -521,7 +540,6 @@ function AdminArtManagement() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Medium */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Medium
@@ -537,7 +555,6 @@ function AdminArtManagement() {
                   />
                 </div>
 
-                {/* Dimensions */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Dimensions
@@ -561,7 +578,6 @@ function AdminArtManagement() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Price */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Price (Rs.)
@@ -585,7 +601,6 @@ function AdminArtManagement() {
                   )}
                 </div>
 
-                {/* Category */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Category *
@@ -612,7 +627,6 @@ function AdminArtManagement() {
                 </div>
               </div>
 
-              {/* Collections */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Collections
@@ -635,7 +649,6 @@ function AdminArtManagement() {
                 </div>
               </div>
 
-              {/* Status */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Status * (Current: {modalData.status})
@@ -647,7 +660,6 @@ function AdminArtManagement() {
                     const newStatus = e.target.value;
                     console.log("Status changing from", modalData.status, "to", newStatus);
                     
-                    // Direct state update
                     setModalData(prev => {
                       const updated = { ...prev, status: newStatus };
                       if (newStatus !== "Bid") {
@@ -658,7 +670,6 @@ function AdminArtManagement() {
                       return updated;
                     });
                     
-                    // Clear errors
                     setErrors(prev => ({
                       ...prev,
                       status: "",
@@ -684,7 +695,6 @@ function AdminArtManagement() {
                 )}
               </div>
 
-              {/* Bid End Date/Time - Only show if status is "Bid" */}
               {modalData.status === "Bid" && (
                 <div className="bg-blue-50 p-4 rounded-md border border-blue-200">
                   <h4 className="text-sm font-semibold text-blue-800 mb-3">
@@ -737,7 +747,6 @@ function AdminArtManagement() {
                 </div>
               )}
 
-              {/* Image URL */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Image URL
@@ -771,7 +780,6 @@ function AdminArtManagement() {
                 )}
               </div>
 
-              {/* Description */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Description
@@ -789,7 +797,6 @@ function AdminArtManagement() {
             </div>
           </div>
 
-          {/* Footer */}
           <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-lg flex justify-end gap-3 flex-shrink-0">
             <button
               onClick={onClose}
@@ -840,10 +847,14 @@ function AdminArtManagement() {
   return (
     <div className="flex min-h-screen">
       <AdminSidebar active="Art Management" />
-      <main className="flex-grow p-6 bg-gray-50">
-        {/* Header & buttons */}
+      <main className="flex-grow p-6 bg-gray-50 transition-all duration-300 ease-in-out">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold">Art Management</h1>
+          <div>
+            <h1 className="text-2xl font-bold">Art Management</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Current User's Login: admin
+            </p>
+          </div>
           <div className="space-x-2">
             <button
               onClick={handleAddClick}
@@ -860,7 +871,6 @@ function AdminArtManagement() {
           </div>
         </div>
 
-        {/* Search */}
         <input
           type="text"
           placeholder="Search by any column..."
@@ -869,6 +879,18 @@ function AdminArtManagement() {
           className="w-full md:w-1/2 mb-4 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-black"
         />
 
+        {sortConfig.key && (
+          <div className="mb-4 text-sm text-gray-600">
+            Sorted by: <strong>{sortConfig.key}</strong> ({sortConfig.direction === 'asc' ? 'Ascending' : 'Descending'})
+            <button 
+              onClick={() => setSortConfig({ key: null, direction: 'asc' })}
+              className="ml-2 text-blue-600 hover:text-blue-800 underline"
+            >
+              Clear Sort
+            </button>
+          </div>
+        )}
+
         {loading && (
           <div className="flex justify-center items-center py-8">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black"></div>
@@ -876,18 +898,33 @@ function AdminArtManagement() {
           </div>
         )}
 
-        {/* Table */}
         <div className="overflow-x-auto bg-white shadow-md rounded-lg border border-gray-200">
           <table className="min-w-full divide-y divide-gray-300">
             <thead className="bg-gray-100 border-b border-gray-300">
               <tr>
                 <th className="px-4 py-2 text-left">Image</th>
-                <th className="px-4 py-2 text-left">Art Code</th>
+                <th 
+                  className="px-4 py-2 text-left cursor-pointer hover:bg-gray-200 transition-colors"
+                  onClick={() => handleSort('artCode')}
+                >
+                  <div className="flex items-center gap-2">
+                    Art Code
+                    {getSortIcon('artCode')}
+                  </div>
+                </th>
                 <th className="px-4 py-2 text-left">Title</th>
                 <th className="px-4 py-2 text-left">Artist</th>
                 <th className="px-4 py-2 text-left">Medium</th>
                 <th className="px-4 py-2 text-left">Dimensions</th>
-                <th className="px-4 py-2 text-left">Price(Rs.)</th>
+                <th 
+                  className="px-4 py-2 text-left cursor-pointer hover:bg-gray-200 transition-colors"
+                  onClick={() => handleSort('price')}
+                >
+                  <div className="flex items-center gap-2">
+                    Price(Rs.)
+                    {getSortIcon('price')}
+                  </div>
+                </th>
                 <th className="px-4 py-2 text-left">Category</th>
                 <th className="px-4 py-2 text-left">Collections</th>
                 <th className="px-4 py-2 text-left">Status</th>
@@ -896,7 +933,7 @@ function AdminArtManagement() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredArts.map((art) => (
+              {sortedAndFilteredArts.map((art) => (
                 <tr key={art._id} className="hover:bg-gray-50">
                   <td className="px-4 py-2">
                     <img
@@ -905,7 +942,7 @@ function AdminArtManagement() {
                       className="w-16 h-16 object-cover rounded"
                     />
                   </td>
-                  <td className="px-4 py-2">{art.artCode}</td>
+                  <td className="px-4 py-2 font-mono">{art.artCode}</td>
                   <td className="px-4 py-2">{art.title}</td>
                   <td className="px-4 py-2">{art.artist}</td>
                   <td className="px-4 py-2">{art.medium}</td>
@@ -951,10 +988,13 @@ function AdminArtManagement() {
                   </td>
                 </tr>
               ))}
-              {filteredArts.length === 0 && !loading && (
+              {sortedAndFilteredArts.length === 0 && !loading && (
                 <tr>
                   <td colSpan={12} className="px-4 py-8 text-center text-gray-500">
-                    No artworks found.
+                    {searchQuery
+                      ? "No results found for your search."
+                      : "No artworks found."
+                    }
                   </td>
                 </tr>
               )}
@@ -962,7 +1002,6 @@ function AdminArtManagement() {
           </table>
         </div>
 
-        {/* Delete Confirmation Modal */}
         {deleteTarget && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-lg shadow-lg w-96">
@@ -993,7 +1032,6 @@ function AdminArtManagement() {
           </div>
         )}
 
-        {/* Description Modal */}
         {descriptionModal && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
@@ -1011,7 +1049,6 @@ function AdminArtManagement() {
           </div>
         )}
 
-        {/* Add/Edit Modals */}
         {addModal && (
           <ArtModal
             isAdd

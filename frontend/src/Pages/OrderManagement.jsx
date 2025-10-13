@@ -1,5 +1,5 @@
 // src/pages/OrderManagement.jsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import AdminSidebar from "../components/AdminSlidebar";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -32,6 +32,17 @@ const statusColors = {
   Cancelled: "bg-gray-500",
 };
 
+/* Stable presentational components */
+const Th = ({ children }) => (
+  <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border-r">
+    {children}
+  </th>
+);
+
+const Td = ({ children, className = "" }) => (
+  <td className={`px-4 py-2 border-r ${className}`}>{children}</td>
+);
+
 function OrderManagement() {
   const [orders, setOrders] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -39,8 +50,26 @@ function OrderManagement() {
   const [statusModal, setStatusModal] = useState(null);
   const [addModal, setAddModal] = useState(false);
   const [viewModal, setViewModal] = useState(null);
-  const [editData, setEditData] = useState({});
   const [loading, setLoading] = useState(false);
+
+  // Set document title on mount
+  useEffect(() => {
+    document.title = "Admin | Order & Tracking Management";
+  }, []);
+
+  // Separate state object for form data to prevent re-renders
+  const [formData, setFormData] = useState({
+    artCode: "",
+    artTitle: "",
+    sellType: "Bid",
+    fullName: "",
+    deliveryAddress: "",
+    phoneNumber: "",
+    paymentReceipt: "",
+    status: "Payment Confirmed",
+    orderDate: "",
+    totalAmount: "",
+  });
 
   useEffect(() => {
     loadOrders();
@@ -53,11 +82,10 @@ function OrderManagement() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
-      // Normalize and sort by orderDate desc
       const normalized = data.map((o) => ({
         ...o,
         orderDate: o.orderDate ? o.orderDate.toString().slice(0, 10) : "",
-        totalAmount: o.totalAmount ?? "", // backend stores string
+        totalAmount: o.totalAmount ?? "",
       }));
       const sorted = normalized.sort(
         (a, b) => new Date(b.orderDate) - new Date(a.orderDate)
@@ -113,7 +141,7 @@ function OrderManagement() {
   };
 
   const handleAddClick = () => {
-    setEditData({
+    setFormData({
       artCode: "",
       artTitle: "",
       sellType: "Bid",
@@ -128,28 +156,12 @@ function OrderManagement() {
     setAddModal(true);
   };
 
-  const handleEditChange = (field, value) =>
-    setEditData((prev) => ({ ...prev, [field]: value }));
-
-  const handleReceiptUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) =>
-      setEditData((prev) => ({ ...prev, paymentReceipt: event.target.result }));
-    reader.readAsDataURL(file);
-  };
-
-  const isImageUrl = (url = "") =>
-    /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(url.trim());
-
   const saveAdd = async () => {
     try {
       setLoading(true);
-      // Ensure totalAmount is a string per schema
       const payload = {
-        ...editData,
-        totalAmount: String(editData.totalAmount ?? "").trim(),
+        ...formData,
+        totalAmount: String(formData.totalAmount ?? "").trim(),
       };
       const res = await fetch(API_BASE, {
         method: "POST",
@@ -209,8 +221,8 @@ function OrderManagement() {
       startY: 30,
       head: [
         [
-          "Order ID",
           "Art Code",
+          "Art Title",
           "Customer",
           "Sell Type",
           "Status",
@@ -219,8 +231,8 @@ function OrderManagement() {
         ],
       ],
       body: orders.map((o) => [
-        o._id || o.id,
         o.artCode,
+        o.artTitle,
         o.fullName,
         o.sellType,
         o.status,
@@ -232,129 +244,8 @@ function OrderManagement() {
     doc.save("Order_Report.pdf");
   };
 
-  const AddOrderModal = () => (
-    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg shadow-lg max-w-lg w-11/12 max-h-[90vh] overflow-y-auto">
-        <h2 className="text-lg font-bold mb-4">
-          Add Manual Order (Bid Winner)
-        </h2>
-        <div className="space-y-4">
-          <LabeledInput
-            label="Art Code *"
-            value={editData.artCode}
-            onChange={(v) => handleEditChange("artCode", v)}
-            placeholder="e.g. ART001"
-          />
-          <LabeledInput
-            label="Art Title *"
-            value={editData.artTitle}
-            onChange={(v) => handleEditChange("artTitle", v)}
-            placeholder="Artwork Title"
-          />
-          <LabeledSelect
-            label="Sell Type"
-            value={editData.sellType}
-            onChange={(v) => handleEditChange("sellType", v)}
-            options={SELL_TYPES}
-          />
-          <LabeledInput
-            label="Full Name *"
-            value={editData.fullName}
-            onChange={(v) => handleEditChange("fullName", v)}
-            placeholder="Customer Full Name"
-          />
-          <LabeledTextarea
-            label="Delivery Address *"
-            value={editData.deliveryAddress}
-            onChange={(v) => handleEditChange("deliveryAddress", v)}
-            placeholder="Full Delivery Address"
-          />
-          <LabeledInput
-            label="Phone Number *"
-            value={editData.phoneNumber}
-            onChange={(v) => handleEditChange("phoneNumber", v)}
-            placeholder="07XXXXXXXX"
-          />
-          <LabeledInput
-            label="Total Amount *"
-            value={editData.totalAmount}
-            onChange={(v) => handleEditChange("totalAmount", v)}
-            placeholder="LKR 00,000"
-          />
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Payment Receipt URL
-            </label>
-
-            {/* Optional preview if it looks like an image link */}
-            {editData.paymentReceipt && isImageUrl(editData.paymentReceipt) && (
-              <img
-                src={editData.paymentReceipt}
-                alt="Receipt Preview"
-                className="w-32 h-40 object-cover rounded mb-2"
-                onError={(e) => (e.currentTarget.style.display = "none")}
-              />
-            )}
-
-            {/* If not an image link, show a visit link */}
-            {editData.paymentReceipt &&
-              !isImageUrl(editData.paymentReceipt) && (
-                <a
-                  href={editData.paymentReceipt}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-block mb-2 text-blue-600 hover:underline text-sm"
-                >
-                  Open receipt link
-                </a>
-              )}
-
-            <input
-              type="url"
-              value={editData.paymentReceipt}
-              onChange={(e) =>
-                setEditData((prev) => ({
-                  ...prev,
-                  paymentReceipt: e.target.value,
-                }))
-              }
-              placeholder="https://example.com/receipt.jpg or .pdf"
-              className="w-full px-3 py-2 border rounded"
-            />
-
-            <p className="mt-1 text-xs text-gray-500">
-              Paste a public link to the receipt (image or PDF). If it is an
-              image link, a preview will appear above.
-            </p>
-          </div>
-
-          <LabeledSelect
-            label="Initial Status"
-            value={editData.status}
-            onChange={(v) => handleEditChange("status", v)}
-            options={STATUS_OPTIONS}
-          />
-        </div>
-
-        <div className="flex justify-end mt-4 space-x-2">
-          <button
-            onClick={() => setAddModal(false)}
-            className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400"
-            disabled={loading}
-          >
-            Cancel
-          </button>
-          <button
-            onClick={saveAdd}
-            className="px-4 py-2 rounded bg-black text-white hover:bg-gray-800"
-            disabled={loading}
-          >
-            {loading ? "Adding..." : "Add Order"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+  const isImageUrl = (url = "") =>
+    /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(url.trim());
 
   return (
     <div className="flex min-h-screen">
@@ -395,7 +286,6 @@ function OrderManagement() {
           <table className="min-w-full divide-y divide-gray-300 border-collapse">
             <thead className="bg-gray-100 border-b border-gray-300">
               <tr>
-                <Th>Order ID</Th>
                 <Th>Art Code</Th>
                 <Th>Art Title</Th>
                 <Th>Sell Type</Th>
@@ -415,8 +305,7 @@ function OrderManagement() {
                   key={order._id || order.id}
                   className="hover:bg-gray-50 transition"
                 >
-                  <Td className="font-medium">{order._id || order.id}</Td>
-                  <Td className="font-mono text-blue-600">{order.artCode}</Td>
+                  <Td className="font-medium font-mono text-blue-600">{order.artCode}</Td>
                   <Td>{order.artTitle}</Td>
                   <Td>
                     <span
@@ -468,7 +357,7 @@ function OrderManagement() {
               ))}
               {filteredOrders.length === 0 && (
                 <tr>
-                  <td colSpan="10" className="text-center py-4 text-gray-500">
+                  <td colSpan="9" className="text-center py-4 text-gray-500">
                     No orders found.
                   </td>
                 </tr>
@@ -477,6 +366,216 @@ function OrderManagement() {
           </table>
         </div>
 
+        {/* Add Order Modal */}
+        {addModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+            <div className="bg-white p-6 rounded-lg shadow-lg max-w-lg w-11/12 max-h-[90vh] overflow-y-auto">
+              <h2 className="text-lg font-bold mb-4">
+                Add Manual Order (Bid Winner)
+              </h2>
+              <div className="space-y-4">
+                
+                <div key="artCode-field">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Art Code *
+                  </label>
+                  <input
+                    key="artCode-input"
+                    type="text"
+                    value={formData.artCode}
+                    onChange={(e) =>
+                      setFormData(prev => ({ ...prev, artCode: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-black"
+                    placeholder="e.g. ART001"
+                  />
+                </div>
+
+                <div key="artTitle-field">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Art Title *
+                  </label>
+                  <input
+                    key="artTitle-input"
+                    type="text"
+                    value={formData.artTitle}
+                    onChange={(e) =>
+                      setFormData(prev => ({ ...prev, artTitle: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-black"
+                    placeholder="Artwork Title"
+                  />
+                </div>
+
+                <div key="sellType-field">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Sell Type
+                  </label>
+                  <select
+                    key="sellType-select"
+                    value={formData.sellType}
+                    onChange={(e) =>
+                      setFormData(prev => ({ ...prev, sellType: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-black"
+                  >
+                    {SELL_TYPES.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div key="fullName-field">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Full Name *
+                  </label>
+                  <input
+                    key="fullName-input"
+                    type="text"
+                    value={formData.fullName}
+                    onChange={(e) =>
+                      setFormData(prev => ({ ...prev, fullName: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-black"
+                    placeholder="Customer Full Name"
+                  />
+                </div>
+
+                <div key="deliveryAddress-field">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Delivery Address *
+                  </label>
+                  <textarea
+                    key="deliveryAddress-textarea"
+                    value={formData.deliveryAddress}
+                    onChange={(e) =>
+                      setFormData(prev => ({ ...prev, deliveryAddress: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-black"
+                    rows={3}
+                    placeholder="Full Delivery Address"
+                  />
+                </div>
+
+                <div key="phoneNumber-field">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Phone Number *
+                  </label>
+                  <input
+                    key="phoneNumber-input"
+                    type="text"
+                    value={formData.phoneNumber}
+                    onChange={(e) =>
+                      setFormData(prev => ({ ...prev, phoneNumber: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-black"
+                    placeholder="07XXXXXXXX"
+                  />
+                </div>
+
+                <div key="totalAmount-field">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Total Amount *
+                  </label>
+                  <input
+                    key="totalAmount-input"
+                    type="text"
+                    value={formData.totalAmount}
+                    onChange={(e) =>
+                      setFormData(prev => ({ ...prev, totalAmount: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-black"
+                    placeholder="LKR 00,000"
+                  />
+                </div>
+
+                <div key="paymentReceipt-field">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Payment Receipt URL
+                  </label>
+
+                  {formData.paymentReceipt && isImageUrl(formData.paymentReceipt) && (
+                    <img
+                      src={formData.paymentReceipt}
+                      alt="Receipt Preview"
+                      className="w-32 h-40 object-cover rounded mb-2"
+                      onError={(e) => (e.currentTarget.style.display = "none")}
+                    />
+                  )}
+
+                  {formData.paymentReceipt &&
+                    !isImageUrl(formData.paymentReceipt) && (
+                      <a
+                        href={formData.paymentReceipt}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-block mb-2 text-blue-600 hover:underline text-sm"
+                      >
+                        Open receipt link
+                      </a>
+                    )}
+
+                  <input
+                    key="paymentReceipt-input"
+                    type="url"
+                    value={formData.paymentReceipt}
+                    onChange={(e) =>
+                      setFormData(prev => ({ ...prev, paymentReceipt: e.target.value }))
+                    }
+                    placeholder="https://example.com/receipt.jpg or .pdf"
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-black"
+                  />
+
+                  <p className="mt-1 text-xs text-gray-500">
+                    Paste a public link to the receipt (image or PDF). If it is an
+                    image link, a preview will appear above.
+                  </p>
+                </div>
+
+                <div key="status-field">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Initial Status
+                  </label>
+                  <select
+                    key="status-select"
+                    value={formData.status}
+                    onChange={(e) =>
+                      setFormData(prev => ({ ...prev, status: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-black"
+                  >
+                    {STATUS_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex justify-end mt-4 space-x-2">
+                <button
+                  onClick={() => setAddModal(false)}
+                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 transition"
+                  disabled={loading}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={saveAdd}
+                  className="px-4 py-2 rounded bg-black text-white hover:bg-gray-800 transition"
+                  disabled={loading}
+                >
+                  {loading ? "Adding..." : "Add Order"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Status Modal */}
         {statusModal && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-lg shadow-lg w-96">
@@ -514,7 +613,7 @@ function OrderManagement() {
               <div className="flex justify-end mt-4">
                 <button
                   onClick={() => setStatusModal(null)}
-                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400"
+                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 transition"
                 >
                   Cancel
                 </button>
@@ -523,14 +622,12 @@ function OrderManagement() {
           </div>
         )}
 
+        {/* View Modal */}
         {viewModal && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-lg shadow-lg max-w-lg w-11/12 max-h-[90vh] overflow-y-auto">
               <h2 className="text-lg font-bold mb-4">Order Details</h2>
               <div className="space-y-3">
-                <div>
-                  <strong>Order ID:</strong> {viewModal._id || viewModal.id}
-                </div>
                 <div>
                   <strong>Art Code:</strong>{" "}
                   <span className="text-blue-600 font-mono">
@@ -582,7 +679,7 @@ function OrderManagement() {
               <div className="flex justify-end mt-4">
                 <button
                   onClick={() => setViewModal(null)}
-                  className="px-4 py-2 rounded bg-black text-white hover:bg-gray-800"
+                  className="px-4 py-2 rounded bg-black text-white hover:bg-gray-800 transition"
                 >
                   Close
                 </button>
@@ -591,6 +688,7 @@ function OrderManagement() {
           </div>
         )}
 
+        {/* Delete Modal */}
         {deleteTarget && (
           <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
             <div className="bg-white p-6 rounded-lg shadow-lg w-96">
@@ -603,14 +701,14 @@ function OrderManagement() {
               <div className="flex justify-end space-x-4">
                 <button
                   onClick={() => setDeleteTarget(null)}
-                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400"
+                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 transition"
                   disabled={loading}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={confirmDelete}
-                  className="px-4 py-2 rounded bg-red-500 text-white hover:bg-red-600"
+                  className="px-4 py-2 rounded bg-red-500 text-white hover:bg-red-600 transition"
                   disabled={loading}
                 >
                   {loading ? "Deleting..." : "Delete"}
@@ -619,70 +717,9 @@ function OrderManagement() {
             </div>
           </div>
         )}
-
-        {addModal && <AddOrderModal />}
       </main>
     </div>
   );
 }
-
-/* Small presentational helpers */
-const Th = ({ children }) => (
-  <th className="px-4 py-2 text-left text-sm font-medium text-gray-700 border-r">
-    {children}
-  </th>
-);
-const Td = ({ children, className = "" }) => (
-  <td className={`px-4 py-2 border-r ${className}`}>{children}</td>
-);
-
-const LabeledInput = ({ label, value, onChange, placeholder }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      {label}
-    </label>
-    <input
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full px-3 py-2 border rounded"
-      placeholder={placeholder}
-    />
-  </div>
-);
-
-const LabeledTextarea = ({ label, value, onChange, placeholder }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      {label}
-    </label>
-    <textarea
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full px-3 py-2 border rounded"
-      rows={3}
-      placeholder={placeholder}
-    />
-  </div>
-);
-
-const LabeledSelect = ({ label, value, onChange, options }) => (
-  <div>
-    <label className="block text-sm font-medium text-gray-700 mb-1">
-      {label}
-    </label>
-    <select
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="w-full px-3 py-2 border rounded"
-    >
-      {options.map((opt) => (
-        <option key={opt} value={opt}>
-          {opt}
-        </option>
-      ))}
-    </select>
-  </div>
-);
 
 export default OrderManagement;

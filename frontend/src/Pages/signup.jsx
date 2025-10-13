@@ -17,17 +17,29 @@ function Signup() {
   const [agreed, setAgreed] = useState(false);
   const [errors, setErrors] = useState({});
 
+
+  useEffect(() => {
+    document.title = "Ceylon Galleria | Sign Up";
+  }, []);
+
   // Validation functions
   const validators = {
     name: (val) => /^[A-Za-z ]{2,}$/.test(val) || "Name must be at least 2 letters.",
+
     gmail: (val) =>
       /^\S+@\S+\.\S+$/.test(val) || "Enter a valid email address.",
+
+
     password: (val) =>
       /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/.test(val) ||
       "Password must be 8+ chars, with uppercase, lowercase, number & special char.",
+
+
     confirmPassword: (val) =>
       val === form.password || "Passwords do not match.",
-    phone: (val) => /^\d{7,}$/.test(val) || "Phone must be at least 7 digits.",
+
+    phone: (val) => /^\d{7,}$/.test(val) || "Phone must be at least 10 digits.",
+
     country: (val) => /^[A-Za-z ]{2,}$/.test(val) || "Enter a valid country.",
   };
 
@@ -43,32 +55,46 @@ function Signup() {
   };
 
   const handleSubmit = async (e) => {
-    e.preventDefault();
+  e.preventDefault();
 
-    // Validate all fields
-    let valid = true;
-    const newErrors = {};
-    for (const field in validators) {
-      const result = validators[field](form[field]);
-      if (result !== true) {
-        valid = false;
-        newErrors[field] = result;
-      }
+  // Validate all fields
+  let valid = true;
+  const newErrors = {};
+  for (const field in validators) {
+    const result = validators[field](form[field]);
+    if (result !== true) {
+      valid = false;
+      newErrors[field] = result;
     }
-    setErrors(newErrors);
+  }
+  setErrors(newErrors);
 
-    if (!valid || !agreed) return;
+  if (!valid || !agreed) return;
 
-    try {
-      await axios.post("http://localhost:5000/api/users/register", {
-        ...form,
-        role: "user",
-      });
-      navigate("/"); // redirect to home page
-    } catch (err) {
-      alert(err.response?.data?.error || "Registration failed");
-    }
-  };
+  try {
+    // 1️⃣ Register user
+    await axios.post("http://localhost:5000/api/users/register", {
+      ...form,
+      role: "user",
+    });
+
+    // 2️⃣ Auto-login immediately after signup
+    const loginRes = await axios.post("http://localhost:5000/api/users/login", {
+      gmail: form.gmail,
+      password: form.password,
+    });
+
+    // 3️⃣ Save login data to localStorage
+    localStorage.setItem("user", JSON.stringify(loginRes.data));
+
+    // 4️⃣ Navigate to homepage
+    navigate("/");
+  } catch (err) {
+    console.error(err.response || err);
+    alert(err.response?.data?.error || "Registration or login failed");
+  }
+};
+
 
   // Check if all fields are valid
   const isFormValid =

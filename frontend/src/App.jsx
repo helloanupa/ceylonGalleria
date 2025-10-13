@@ -1,13 +1,14 @@
 // App.jsx
 import React from "react";
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 
 // Pages
 import HomePage from "./Pages/home.jsx";
 import SignUp from "./Pages/signup.jsx";
 import SignIn from "./Pages/signin.jsx";
 import Dashboard from "./Pages/about.jsx";
-import Contact from "./Pages/contactus.jsx";
+
 import Exhibitions from "./Pages/exhibition.jsx";
 import Artshow from "./Pages/artshow.jsx";
 import UserProfile from "./Pages/userprofile.jsx";
@@ -20,43 +21,108 @@ import UserManagement from "./Pages/UserManagement.jsx";
 import OrderManagement from "./Pages/OrderManagement.jsx";
 import BiddingManagement from "./Pages/BiddingManagement.jsx";
 
-function App() {
-  return (
-    <Router>
-      <Routes>
-        {/* Public routes */}
-        <Route path="/" element={<HomePage />} />
-        <Route path="/signup" element={<SignUp />} />
-        <Route path="/signin" element={<SignIn />} />
-        <Route path="/about" element={<Dashboard />} />
-        <Route path="/contact" element={<Contact />} />
-        <Route path="/exhibitions" element={<Exhibitions />} />
-        <Route path="/artshow" element={<Artshow />} />
-        <Route path="/userprofile" element={<UserProfile />} />
-        <Route path="/directbuypayment" element={<Payment />} />
-        <Route path="/productPageDirect/:id" element={<Directbuy />} />
-        <Route path="/productPageBid/:id" element={<Bidbuy />} />
+// Page transition settings
+const pageTransition = {
+  initial: { opacity: 0, y: 20 },
+  animate: { opacity: 1, y: 0 },
+  exit: { opacity: 0, y: -20 },
+  transition: { duration: 0.4 },
+};
 
-        {/* Admin routes  */}
-        <Route path="/admin" element={<AdminArtManagement />} />
-        <Route path="/admin/art-management" element={<AdminArtManagement />} />
+// AnimatedRoutes component
+function AnimatedRoutes() {
+  const location = useLocation();
+
+  return (
+    <AnimatePresence mode="wait">
+      <Routes location={location} key={location.pathname}>
+        {/* Public routes */}
+        <Route
+          path="/"
+          element={<motion.div {...pageTransition}><HomePage /></motion.div>}
+        />
+        <Route
+          path="/signup"
+          element={<motion.div {...pageTransition}><SignUp /></motion.div>}
+        />
+        <Route
+          path="/signin"
+          element={<motion.div {...pageTransition}><SignIn /></motion.div>}
+        />
+        <Route
+          path="/about"
+          element={<motion.div {...pageTransition}><Dashboard /></motion.div>}
+        />
+        <Route
+          path="/exhibitions"
+          element={<motion.div {...pageTransition}><Exhibitions /></motion.div>}
+        />
+        <Route
+          path="/artshow"
+          element={<motion.div {...pageTransition}><Artshow /></motion.div>}
+        />
+        <Route
+          path="/userprofile"
+          element={<motion.div {...pageTransition}><UserProfile /></motion.div>}
+        />
+        <Route
+          path="/directbuypayment"
+          element={<motion.div {...pageTransition}><Payment /></motion.div>}
+        />
+        <Route
+          path="/productPageDirect/:id"
+          element={<motion.div {...pageTransition}><Directbuy /></motion.div>}
+        />
+        <Route
+          path="/productPageBid/:id"
+          element={<motion.div {...pageTransition}><Bidbuy /></motion.div>}
+        />
+
+        {/* Admin routes */}
+        <Route
+          path="/admin"
+          element={<motion.div {...pageTransition}><AdminArtManagement /></motion.div>}
+        />
+        <Route
+          path="/admin/art-management"
+          element={<motion.div {...pageTransition}><AdminArtManagement /></motion.div>}
+        />
         <Route
           path="/admin/exhibition-management"
-          element={<ExhibitionsManagement />}
+          element={<motion.div {...pageTransition}><ExhibitionsManagement /></motion.div>}
         />
-        <Route path="/admin/user-management" element={<UserManagement />} />
-        <Route path="/admin/order-management" element={<OrderManagement />} />
+        <Route
+          path="/admin/user-management"
+          element={<motion.div {...pageTransition}><UserManagement /></motion.div>}
+        />
+        <Route
+          path="/admin/order-management"
+          element={<motion.div {...pageTransition}><OrderManagement /></motion.div>}
+        />
         <Route
           path="/admin/bidding-management"
-          element={<BiddingManagement />}
+          element={<motion.div {...pageTransition}><BiddingManagement /></motion.div>}
         />
 
         {/* Fallback */}
         <Route
           path="*"
-          element={<h1 className="text-center mt-20">404 – Page Not Found</h1>}
+          element={
+            <motion.div {...pageTransition}>
+              <h1 className="text-center mt-20">404 – Page Not Found</h1>
+            </motion.div>
+          }
         />
       </Routes>
+    </AnimatePresence>
+  );
+}
+
+// Main App component
+function App() {
+  return (
+    <Router>
+      <AnimatedRoutes />
     </Router>
   );
 }

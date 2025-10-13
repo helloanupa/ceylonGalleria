@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { createClient } from "@supabase/supabase-js";
 import Header from "../components/Header";
@@ -11,6 +11,11 @@ const supabase = createClient(
 );
 
 function Payment() {
+  // Set document title on mount
+  useEffect(() => {
+    document.title = "Ceylon Galleria | payment";
+  }, []);
+
   const location = useLocation();
   const navigate = useNavigate();
   const artData = location.state?.art;

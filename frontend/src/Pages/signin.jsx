@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import Header from "../components/Header";
@@ -9,6 +9,10 @@ function SignIn() {
   const [form, setForm] = useState({ gmail: "", password: "" });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    document.title = "Ceylon Galleria | Sign In";
+  }, []);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -80,6 +84,11 @@ function SignIn() {
               {loading ? "Signing In..." : "Sign In"}
             </button>
           </form>
+
+          {/* Forgot Password Link */}
+          <p className="mt-2">
+             <a href="/forgot-password" className="text-blue-500">Forgot Password?</a>
+           </p>
 
           <p className="text-sm text-gray-600 text-center mt-4">
             Don’t have an account?{" "}

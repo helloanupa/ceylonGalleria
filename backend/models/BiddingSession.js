@@ -19,6 +19,14 @@ const biddingSessionSchema = new mongoose.Schema({
     enum: ["Open", "Closed", "Completed", "Cancelled"],
     default: "Open",
   },
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now }
+});
+
+// Add a pre-save middleware to update the updatedAt field
+biddingSessionSchema.pre('save', function(next) {
+  this.updatedAt = new Date();
+  next();
 });
 
 module.exports = mongoose.model("BiddingSession", biddingSessionSchema);
