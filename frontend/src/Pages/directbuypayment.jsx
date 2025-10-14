@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { createClient } from "@supabase/supabase-js";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
+import jsPDF from "jspdf";
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -35,6 +36,9 @@ function Payment() {
   const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);   // File object
+  const [submittedOrder, setSubmittedOrder] = useState(null); // For PDF generation
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false); // For smooth modal animation
 
   // If no art data is provided
   if (!artData) {
@@ -59,6 +63,15 @@ function Payment() {
       </div>
     );
   }
+
+  // Effect for smooth modal animation
+  useEffect(() => {
+    if (showSuccessModal) {
+      // Use a timeout to allow the transition to trigger after the component mounts
+      const timer = setTimeout(() => setModalVisible(true), 10);
+      return () => clearTimeout(timer);
+    }
+  }, [showSuccessModal]);
 
   const bankDetails = {
     bankName: "Bank of Ceylon",
@@ -203,6 +216,125 @@ function Payment() {
     }
   };
 
+  const generatePurchaseConfirmationPDF = async () => {
+    if (!submittedOrder || !artData) return;
+
+    try {
+      setPdfGenerating(true);
+      const doc = new jsPDF("p", "mm", "a4");
+      const pageWidth = 210;
+      const margin = 20;
+      const contentWidth = pageWidth - margin * 2;
+      let currentY = 30;
+
+      const addText = (text, x, y, options = {}) => {
+        const { fontSize = 10, fontStyle = "normal", align = "left" } = options;
+        doc.setFontSize(fontSize);
+        doc.setFont("helvetica", fontStyle);
+        doc.text(text, x, y, { align });
+      };
+
+      // Header
+      doc.setFillColor(245, 245, 245);
+      doc.rect(0, 0, pageWidth, 40, "F");
+      addText("CEYLON GALLERIA", pageWidth / 2, 20, {
+        fontSize: 24,
+        fontStyle: "bold",
+        align: "center",
+      });
+      addText("by Janith Weerasinghe", pageWidth / 2, 28, {
+        fontSize: 10,
+        align: "center",
+      });
+
+      // Title
+      currentY = 55;
+      addText("PURCHASE CONFIRMATION", pageWidth / 2, currentY, {
+        fontSize: 18,
+        fontStyle: "bold",
+        align: "center",
+      });
+
+      // Sub-details
+      currentY += 10;
+      const submissionDate = new Date(submittedOrder.submittedAt);
+      addText(`Submitted: ${submissionDate.toLocaleString()}`, pageWidth / 2, currentY, {
+        fontSize: 8,
+        align: "center",
+      });
+      currentY += 6;
+      addText(`Order Reference: ${submittedOrder.orderId}`, pageWidth / 2, currentY, {
+        fontSize: 8,
+        align: "center",
+      });
+
+      // Artwork Info
+      currentY += 20;
+      doc.setFillColor(0, 0, 0);
+      doc.rect(margin, currentY - 5, contentWidth, 8, "F");
+      doc.setTextColor(255, 255, 255);
+      addText("ARTWORK DETAILS", margin + 5, currentY, {
+        fontSize: 12,
+        fontStyle: "bold",
+      });
+
+      doc.setTextColor(0, 0, 0);
+      currentY += 15;
+      addText(`Title: ${artData.title || "Untitled"}`, margin, currentY, { fontSize: 12, fontStyle: "bold" });
+      currentY += 8;
+      addText(`Artist: ${artData.artist || "Unknown Artist"}`, margin, currentY);
+      currentY += 6;
+      addText(`Art Code: ${artData.artCode || "N/A"}`, margin, currentY);
+      currentY += 6;
+      addText(`Price: LKR ${getNumericPrice(artData.price)?.toLocaleString() || "N/A"}`, margin, currentY);
+
+      // Customer Info
+      currentY += 20;
+      doc.setFillColor(0, 0, 0);
+      doc.rect(margin, currentY - 5, contentWidth, 8, "F");
+      doc.setTextColor(255, 255, 255);
+      addText("CUSTOMER INFORMATION", margin + 5, currentY, { fontSize: 12, fontStyle: "bold" });
+
+      doc.setTextColor(0, 0, 0);
+      currentY += 15;
+      addText(`Name: ${submittedOrder.fullName}`, margin, currentY);
+      currentY += 8;
+      addText(`Contact: ${submittedOrder.phoneNumber}`, margin, currentY);
+      currentY += 8;
+      addText(`Delivery/Pickup Address: ${submittedOrder.deliveryAddress}`, margin, currentY);
+
+      // Next Steps
+      currentY += 20;
+      doc.setFillColor(250, 250, 250);
+      doc.rect(margin, currentY, contentWidth, 30, "F");
+      doc.setDrawColor(200, 200, 200);
+      doc.rect(margin, currentY, contentWidth, 30);
+      addText("NEXT STEPS", margin + 5, currentY + 8, { fontSize: 11, fontStyle: "bold" });
+      const nextSteps = [
+        "• Our team will verify your payment receipt within 24-48 hours.",
+        "• You will receive a confirmation email once payment is verified.",
+        `• We will then contact you to coordinate ${deliveryOption === "delivery" ? "delivery" : "your gallery pickup"}.`,
+      ];
+      let infoY = currentY + 15;
+      nextSteps.forEach((point) => {
+        addText(point, margin + 5, infoY, { fontSize: 9 });
+        infoY += 6;
+      });
+
+      // Footer Quote
+      currentY = doc.internal.pageSize.height - 30;
+      addText(`"Art is the most beautiful of all lies."`, pageWidth / 2, currentY, { fontSize: 10, fontStyle: "italic", align: "center" });
+      currentY += 6;
+      addText("Thank you for supporting Ceylon's artistic heritage.", pageWidth / 2, currentY, { fontSize: 9, align: "center" });
+
+      const cleanTitle = (artData.title || "Artwork").replace(/[^a-zA-Z0-9]/g, "_");
+      const fileName = `Ceylon_Galleria_Purchase_${cleanTitle}_${submittedOrder.orderId}.pdf`;
+      doc.save(fileName);
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
+
   const handleSubmit = async () => {
     setError(null);
     setIsLoading(true);
@@ -233,7 +365,7 @@ function Payment() {
     }
 
     const orderData = {
-      artCode: artData?.id || `ART${Math.floor(Math.random() * 1000)}`,
+      artCode: artData?.artCode || `ART${Math.floor(Math.random() * 1000)}`,
       artTitle: artData?.title ?? "Untitled",
       sellType: "Direct",
       fullName: (customerInfo.name || "").trim(),
@@ -259,6 +391,29 @@ function Payment() {
         throw new Error(errorData.message || `HTTP error ${response.status}`);
       }
 
+      const newOrder = await response.json();
+
+      setSubmittedOrder({
+        ...orderData,
+        orderId: newOrder._id, // Assuming the response contains the created order with an ID
+        submittedAt: new Date().toISOString(),
+      });
+
+      // --- New Step: Update the artwork status to "Not Listed" ---
+      if (artData?._id) {
+        const artUpdateResponse = await fetch(`http://localhost:5000/api/arts/${artData._id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "Not Listed" }),
+        });
+
+        if (!artUpdateResponse.ok) {
+          // Log a warning but don't block the user, as the order was successful.
+          // The admin can manually update the status.
+          console.warn(`Order created, but failed to update art status for art ID ${artData._id}.`);
+        }
+      }
+
       setPaymentSubmitted(true);
       setShowSuccessModal(true);
       setError(null);
@@ -271,8 +426,12 @@ function Payment() {
   };
 
   const closeSuccessModal = () => {
-    setShowSuccessModal(false);
-    navigate("/");
+    setModalVisible(false);
+    // Wait for the animation to finish before navigating and unmounting
+    setTimeout(() => {
+      setShowSuccessModal(false);
+      navigate("/");
+    }, 300); // This should match the transition duration
   };
 
   return (
@@ -790,8 +949,16 @@ function Payment() {
 
       {/* Success Modal */}
       {showSuccessModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
-          <div className="bg-white p-6 max-w-md w-full border border-gray-200 shadow-lg text-center">
+        <div
+          className={`fixed inset-0 bg-black flex items-center justify-center z-50 px-4 transition-opacity duration-300 ${
+            modalVisible ? "bg-opacity-50" : "bg-opacity-0"
+          }`}
+        >
+          <div
+            className={`bg-white p-6 max-w-md w-full border border-gray-200 shadow-lg text-center transform transition-all duration-300 ${
+              modalVisible ? "scale-100 opacity-100" : "scale-95 opacity-0"
+            }`}
+          >
             <div className="mb-4">
               <svg
                 className="w-16 h-16 text-green-600 mx-auto"
@@ -826,14 +993,31 @@ function Payment() {
               "Art is the most beautiful of all lies." - Thank you for
               supporting Ceylon's artistic heritage.
             </p>
-
-            <button
-              type="button"
-              onClick={closeSuccessModal}
-              className="w-full py-2.5 font-medium uppercase tracking-wide text-white bg-black hover:bg-gray-800 transition-colors"
-            >
-              Close & Continue
-            </button>
+            
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                type="button"
+                onClick={generatePurchaseConfirmationPDF}
+                disabled={pdfGenerating}
+                className="flex-1 py-2.5 font-medium uppercase tracking-wide text-white bg-black hover:bg-gray-800 transition-colors flex items-center justify-center gap-2 disabled:bg-gray-500"
+              >
+                {pdfGenerating ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <span>Generating...</span>
+                  </>
+                ) : (
+                  "Download Confirmation"
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={closeSuccessModal}
+                className="flex-1 py-2.5 font-medium uppercase tracking-wide text-gray-700 bg-gray-200 hover:bg-gray-300 transition-colors"
+              >
+                Close & Continue
+              </button>
+            </div>
           </div>
         </div>
       )}

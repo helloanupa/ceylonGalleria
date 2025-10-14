@@ -57,9 +57,6 @@ router.post("/batch", async (req, res) => {
           startingPrice: art.price || 0,
           bidEndDate: art.bidEndDate,
           bidEndTime: art.bidEndTime,
-          status: "Open",
-          createdAt: new Date(),
-          updatedAt: new Date()
         });
         
         await newSession.save();
@@ -72,12 +69,7 @@ router.post("/batch", async (req, res) => {
       }
     }
     
-    res.json({
-      message: `Created ${createdSessions.length} bidding sessions${errors.length > 0 ? ` with ${errors.length} errors` : ''}`,
-      sessions: createdSessions,
-      errors: errors
-    });
-    
+    res.json({ sessions: createdSessions, errors: errors });
   } catch (err) {
     res.status(500).json({ msg: err.message });
   }
@@ -178,153 +170,6 @@ router.delete("/:id", async (req, res) => {
     res.json({ msg: "Session deleted successfully" });
   } catch (err) {
     res.status(500).json({ msg: err.message });
-  }
-});
-
-router.get("/check-status-changes", async (req, res) => {
-  try {
-    const sessions = await BiddingSession.find({ 
-      status: { $in: ["Open", "Closed", "Completed"] }
-    }).populate("art");
-    
-    const changedStatusSessions = sessions.filter(
-      (session) => session.art && session.art.status !== "Bid"
-    );
-    
-    const changedArts = changedStatusSessions.map((session) => ({
-      sessionId: session._id,
-      artId: session.art._id,
-      artCode: session.art.artCode || "Unknown",
-      title: session.art.title || "Untitled",
-      currentStatus: session.art.status,
-      bidCount: session.bids?.length || 0,
-      sessionStatus: session.status
-    }));
-    
-    res.json(changedArts);
-  } catch (err) {
-    res.status(500).json({ msg: err.message });
-  }
-});
-
-router.get('/check-bid-date-changes', async (req, res) => {
-  try {
-    const sessions = await BiddingSession.find({ 
-      status: { $ne: 'Cancelled' } 
-    }).populate('art');
-    
-    const dateChanges = [];
-    
-    for (const session of sessions) {
-      if (session.art) {
-        const sessionEndDate = session.bidEndDate ? new Date(session.bidEndDate).toISOString().split('T')[0] : '';
-        const artEndDate = session.art.bidEndDate ? new Date(session.art.bidEndDate).toISOString().split('T')[0] : '';
-        
-        const sessionEndTime = session.bidEndTime || '';
-        const artEndTime = session.art.bidEndTime || '';
-        
-        if (sessionEndDate !== artEndDate || sessionEndTime !== artEndTime) {
-          dateChanges.push({
-            sessionId: session._id,
-            artId: session.art._id,
-            artCode: session.art.artCode,
-            title: session.art.title,
-            oldBidEndDate: sessionEndDate,
-            oldBidEndTime: sessionEndTime,
-            newBidEndDate: artEndDate,
-            newBidEndTime: artEndTime
-          });
-        }
-      }
-    }
-    
-    res.json(dateChanges);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-router.put('/sync-dates', async (req, res) => {
-  try {
-    const { sessionIds } = req.body;
-    
-    if (!sessionIds || !Array.isArray(sessionIds)) {
-      return res.status(400).json({ error: 'sessionIds array is required' });
-    }
-    
-    const updatedSessions = [];
-    const errors = [];
-    
-    for (const sessionId of sessionIds) {
-      try {
-        const session = await BiddingSession.findById(sessionId).populate('art');
-        
-        if (!session) {
-          errors.push(`Session ${sessionId} not found`);
-          continue;
-        }
-        
-        if (!session.art) {
-          errors.push(`Art data not found for session ${sessionId}`);
-          continue;
-        }
-        
-        session.bidEndDate = session.art.bidEndDate;
-        session.bidEndTime = session.art.bidEndTime;
-        session.updatedAt = new Date();
-        await session.save();
-        
-        updatedSessions.push({
-          sessionId: session._id,
-          artCode: session.art.artCode,
-          newBidEndDate: session.bidEndDate,
-          newBidEndTime: session.bidEndTime
-        });
-        
-      } catch (error) {
-        errors.push(`Error updating session ${sessionId}: ${error.message}`);
-      }
-    }
-    
-    res.json({
-      success: true,
-      message: `Synchronized ${updatedSessions.length} sessions`,
-      updatedSessions,
-      errors: errors.length > 0 ? errors : undefined
-    });
-    
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-router.put('/:sessionId/sync-dates', async (req, res) => {
-  try {
-    const { sessionId } = req.params;
-    const { bidEndDate, bidEndTime } = req.body;
-    
-    const session = await BiddingSession.findById(sessionId).populate('art');
-    if (!session) {
-      return res.status(404).json({ error: 'Bidding session not found' });
-    }
-    
-    session.bidEndDate = bidEndDate;
-    session.bidEndTime = bidEndTime;
-    session.updatedAt = new Date();
-    await session.save();
-    
-    res.json({ 
-      success: true, 
-      message: 'Session dates synchronized successfully',
-      session: {
-        id: session._id,
-        artCode: session.art?.artCode,
-        bidEndDate: session.bidEndDate,
-        bidEndTime: session.bidEndTime
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
   }
 });
 

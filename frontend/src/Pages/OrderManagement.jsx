@@ -1,11 +1,10 @@
-// src/pages/OrderManagement.jsx
 import React, { useState, useEffect, useRef } from "react";
 import AdminSidebar from "../components/AdminSlidebar";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client - REPLACE WITH YOUR ACTUAL URL AND ANON KEY
+// Initialize Supabase client
 const supabase = createClient('https://usqyksnfpxftkpqkkguo.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzcXlrc25mcHhmdGtwcWtrZ3VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAzNTkwNTgsImV4cCI6MjA3NTkzNTA1OH0.q5VI7dITm8wyVkYj0dw-kvoc48cVWkbHKk-isSmlZuc');
 
 const API_BASE = "http://localhost:5000/api/orders";
@@ -24,16 +23,16 @@ const STATUS_OPTIONS = [
 
 const SELL_TYPES = ["Direct", "Bid"];
 
-const statusColors = {
-  "Payment Pending": "bg-red-500",
-  "Payment Verifying": "bg-yellow-500",
-  "Payment Confirmed": "bg-blue-500",
-  Processing: "bg-purple-500",
-  "Ready for Pickup": "bg-indigo-500",
-  "Out for Delivery": "bg",
-  Delivered: "bg-green-500",
-  "Picked Up": "bg-green-600",
-  Cancelled: "bg-gray-500",
+const statusStyles = {
+  "Payment Pending": "bg-yellow-100 text-yellow-800 border border-yellow-300",
+  "Payment Verifying": "bg-yellow-100 text-yellow-800 border border-yellow-300",
+  "Payment Confirmed": "bg-green-100 text-green-800 border border-green-300",
+  Processing: "bg-blue-100 text-blue-800 border border-blue-300",
+  "Ready for Pickup": "bg-blue-100 text-blue-800 border border-blue-300",
+  "Out for Delivery": "bg-blue-100 text-blue-800 border border-blue-300",
+  Delivered: "bg-green-100 text-green-800 border border-green-300",
+  "Picked Up": "bg-green-100 text-green-800 border border-green-300",
+  Cancelled: "bg-gray-100 text-gray-800 border border-gray-300",
 };
 
 /* Stable presentational components */
@@ -55,8 +54,7 @@ function OrderManagement() {
   const [addModal, setAddModal] = useState(false);
   const [viewModal, setViewModal] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  // New: Ref for file input
+  // Ref for file input
   const fileInputRef = useRef(null);
 
   // Set document title on mount
@@ -64,7 +62,7 @@ function OrderManagement() {
     document.title = "Admin | Order & Tracking Management";
   }, []);
 
-  // Separate state object for form data to prevent re-renders
+  // State for the 'Add Order' form
   const [formData, setFormData] = useState({
     artCode: "",
     artTitle: "",
@@ -78,11 +76,11 @@ function OrderManagement() {
     totalAmount: "",
   });
 
-  // New: State for selected file and preview
+  // State for file upload
   const [selectedFile, setSelectedFile] = useState(null);
-  const [filePreview, setFilePreview] = useState(null);  // FLO For local preview
+  const [filePreview, setFilePreview] = useState(null);  // For local preview
 
-  // New: Validation errors state
+  // Validation errors state
   const [validationErrors, setValidationErrors] = useState({});
 
   useEffect(() => {
@@ -176,22 +174,21 @@ function OrderManagement() {
   const validateForm = () => {
     const errors = {};
 
-    // Art Code: Required, alphanumeric with optional dash/underscore
-
+    // Art Code
     if (!formData.artCode.trim()) {
       errors.artCode = "Art Code is required.";
-    } else if (!/^[A-Za-z0-9\-_]+$/.test(formData.artCode.trim())) {
-      errors.artCode = "Art Code must be alphanumeric (letters, numbers, -, _ only).";
+    } else if (!/^ART[A-Za-z0-9\-_]+$/.test(formData.artCode.trim())) {
+      errors.artCode = "Art Code must start with 'ART' (e.g., ART001).";
     }
 
-    // Art Title: Required, letters/spaces min 3 chars
+    // Art Title
     if (!formData.artTitle.trim()) {
       errors.artTitle = "Art Title is required.";
-    } else if (formData.artTitle.trim().length < 3) {
+    } else if (formData.artTitle.trim().length < 2) {
       errors.artTitle = "Art Title must be at least 3 characters.";
     }
 
-    // Sell Type: Required (though defaulted)
+    // Sell Type
     if (!formData.sellType) errors.sellType = "Sell Type is required.";
 
     // Full Name: Required, letters/spaces min 2 chars
@@ -210,7 +207,7 @@ function OrderManagement() {
       errors.deliveryAddress = "Delivery Address must be at least 10 characters.";
     }
 
-    // Phone Number: Required, exactly 10 digits starting with 07
+    // Phone Number
     const phone = formData.phoneNumber.trim();
     if (!phone) {
       errors.phoneNumber = "Phone Number is required.";
@@ -222,7 +219,7 @@ function OrderManagement() {
       errors.phoneNumber = "Phone Number must start with '07'.";
     }
 
-    // Total Amount: Required, positive number (allow commas/decimals)
+    // Total Amount
     const amountStr = formData.totalAmount.trim();
     if (!amountStr) {
       errors.totalAmount = "Total Amount is required.";
@@ -234,13 +231,13 @@ function OrderManagement() {
       }
     }
 
-    // Payment Receipt File: Required
+    // Payment Receipt
     if (!selectedFile) errors.paymentReceipt = "Payment Receipt file is required.";
 
-    // Status: Required (though defaulted)
+    // Status
     if (!formData.status) errors.status = "Initial Status is required.";
 
-    // Order Date: Required and valid date (future or today not allowed? Assuming past/present ok)
+    // Order Date
     if (!formData.orderDate) {
       errors.orderDate = "Order Date is required.";
     } else {
@@ -272,7 +269,7 @@ function OrderManagement() {
         const fileExt = selectedFile.name.split('.').pop();
         const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
         const { data, error } = await supabase.storage
-          .from('images')  // Bucket name: create this in Supabase
+          .from('images')  // Bucket name
           .upload(`public/${fileName}`, selectedFile, {
             cacheControl: '3600',
             upsert: false
@@ -280,7 +277,7 @@ function OrderManagement() {
 
         if (error) throw error;
 
-        // Get public VMware URL
+        // Get public URL
         const { publicUrl } = supabase.storage
           .from('images')
           .getPublicUrl(`public/${fileName}`).data;
@@ -377,7 +374,7 @@ function OrderManagement() {
   const isPdfUrl = (url = "") =>
     /\.pdf(\?.*)?$/i.test(url.trim());
 
-  // Handle file selection and local preview
+  // Handle file selection for the modal
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -470,8 +467,8 @@ function OrderManagement() {
                   <Td className="font-medium">{order.totalAmount}</Td>
                   <Td>
                     <span
-                      className={`px-2 py-1 rounded text-white text-xs ${
-                        statusColors[order.status]
+                      className={`px-2 py-1 rounded text-xs ${
+                        statusStyles[order.status] || 'bg-gray-200 text-gray-800'
                       }`}
                     >
                       {order.status}
@@ -530,9 +527,10 @@ function OrderManagement() {
                     key="artCode-input"
                     type="text"
                     value={formData.artCode}
-                    onChange={(e) =>
-                      setFormData(prev => ({ ...prev, artCode: e.target.value }))
-                    }
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, artCode: e.target.value.toUpperCase() }));
+                      if (validationErrors.artCode) setValidationErrors(prev => ({ ...prev, artCode: null }));
+                    }}
                     className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-black ${validationErrors.artCode ? 'border-red-500' : ''}`}
                     placeholder="e.g. ART001"
                   />
@@ -547,9 +545,10 @@ function OrderManagement() {
                     key="artTitle-input"
                     type="text"
                     value={formData.artTitle}
-                    onChange={(e) =>
-                      setFormData(prev => ({ ...prev, artTitle: e.target.value }))
-                    }
+                    onChange={(e) => {
+                      setFormData(prev => ({ ...prev, artTitle: e.target.value }));
+                      if (validationErrors.artTitle) setValidationErrors(prev => ({ ...prev, artTitle: null }));
+                    }}
                     className={`w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-black ${validationErrors.artTitle ? 'border-red-500' : ''}`}
                     placeholder="Artwork Title"
                   />
@@ -754,8 +753,8 @@ function OrderManagement() {
               <p className="mb-4">
                 <strong>Current Status:</strong>
                 <span
-                  className={`ml-2 px-2 py-1 rounded text-white text-xs ${
-                    statusColors[statusModal.status]
+                  className={`ml-2 px-2 py-1 rounded text-xs ${
+                    statusStyles[statusModal.status] || 'bg-gray-200 text-gray-800'
                   }`}
                 >
                   {statusModal.status}
@@ -823,8 +822,8 @@ function OrderManagement() {
                 <div>
                   <strong>Status:</strong>
                   <span
-                    className={`ml-2 px-2 py-1 rounded text-white text-xs ${
-                      statusColors[viewModal.status]
+                    className={`ml-2 px-2 py-1 rounded text-xs ${
+                      statusStyles[viewModal.status] || 'bg-gray-200 text-gray-800'
                     }`}
                   >
                     {viewModal.status}

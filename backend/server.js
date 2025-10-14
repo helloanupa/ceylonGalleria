@@ -2,6 +2,8 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const path = require("path");
+const http = require("http");
+const { Server } = require("socket.io");
 require("dotenv").config(); // For environment variables
 
 // Import Routes
@@ -33,15 +35,24 @@ const MONGO_URI =
   process.env.MONGO_URI ||
   "mongodb+srv://visurawathsala1_db_user:sjRvVFHuhvbKPyrD@ceylongalleria.bp7t3qj.mongodb.net/?retryWrites=true&w=majority&appName=CeylonGalleria";
 
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:3000",
+    methods: ["GET", "POST"],
+  },
+});
+
+
 mongoose
   .connect(MONGO_URI)
   .then(() => {
     console.log("✅ MongoDB Connected");
     // Start the server only after a successful database connection
-    app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+    server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
   })
   .catch((err) => {
-    console.error("❌ DB Connection Error:", err.message);
+    console.error(" DB Connection Error:", err.message);
     process.exit(1);
   });
 

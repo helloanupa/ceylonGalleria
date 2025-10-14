@@ -60,7 +60,7 @@ function BidProductPage() {
 
   const allChecked = checkedRules.every(Boolean);
 
-  // Set document title on mount
+  // Set document title
   useEffect(() => {
     document.title = "Ceylon Galleria";
   }, []);
@@ -217,6 +217,29 @@ function BidProductPage() {
     setCheckedRules(updated);
   };
 
+  // Parse formatted price strings into numbers
+  function getNumericPrice(price) {
+    if (price == null) return NaN;
+    if (typeof price === "number") return price;
+    if (typeof price === "string") {
+      // remove currency, spaces, commas
+      const cleaned = price.replace(/[^\d.]/g, "");
+      const n = Number(cleaned);
+      return Number.isFinite(n) ? n : NaN;
+    }
+    return NaN;
+  }
+
+  const handleOpenBidModal = () => {
+    const startingPrice = getNumericPrice(art?.price);
+    // Pre-fill form with minimum bid
+    setForm(prev => ({
+      ...prev,
+      offerPrice: Number.isFinite(startingPrice) ? startingPrice : ''
+    }));
+    setIsModalOpen(true);
+  };
+
   const validateForm = () => {
     if (!form.name || form.name.trim() === "") {
       return "Please enter your name";
@@ -227,8 +250,9 @@ function BidProductPage() {
     if (!form.offerPrice || isNaN(Number(form.offerPrice))) {
       return "Please enter a valid price";
     }
-    if (art && Number(form.offerPrice) < art.price) {
-      return `Your bid must be at least LKR ${art.price.toLocaleString()}`;
+    const startingPrice = getNumericPrice(art?.price);
+    if (art && Number(form.offerPrice) < startingPrice) {
+      return `Your bid must be at least LKR ${startingPrice.toLocaleString()}`;
     }
     if (!allChecked) {
       return "Please agree to all bidding rules";
@@ -276,15 +300,6 @@ function BidProductPage() {
 
       currentY += 10;
       const currentDate = new Date();
-      const bidId = `BID-${currentDate.getFullYear()}${(
-        currentDate.getMonth() + 1
-      )
-        .toString()
-        .padStart(2, "0")}${currentDate
-        .getDate()
-        .toString()
-        .padStart(2, "0")}-${Math.random().toString(36).substr(2, 8).toUpperCase()}`;
-
       const formatUTCDateTime = () => {
         const rightNow = new Date();
         const year = rightNow.getUTCFullYear();
@@ -302,7 +317,7 @@ function BidProductPage() {
         align: "center",
       });
       currentY += 6;
-      addText(`Bid Reference: ${bidId}`, pageWidth / 2, currentY, {
+      addText(`Bid Reference: ${submittedBid.bidId}`, pageWidth / 2, currentY, {
         fontSize: 8,
         align: "center",
       });
@@ -366,7 +381,7 @@ function BidProductPage() {
       const bidDetails = [
         ["Bidder Name:", submittedBid.name],
         ["Contact Information:", submittedBid.contact],
-        ["Bid Reference Number:", bidId],
+        ["Bid Reference Number:", submittedBid.bidId],
         ["Submission Date & Time:", submittedBid.submittedAt.toLocaleString()],
         ["Status:", "Successfully Submitted"],
       ];
@@ -501,6 +516,7 @@ function BidProductPage() {
         offerPrice: Number(form.offerPrice),
         contact: form.contact,
         note: form.note,
+        bidId: result._id,
         submittedAt: new Date(),
       });
       setSuccessMessage(true);
@@ -624,7 +640,7 @@ function BidProductPage() {
               <div>
                 {isLoggedIn ? (
                   <button
-                    onClick={() => setIsModalOpen(!isModalOpen)}
+                    onClick={handleOpenBidModal}
                     className="mt-4 w-full py-3 bg-black text-white font-semibold hover:bg-gray-800 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
                   >
                     {isModalOpen ? "Close Bid Form" : "Make Your Bid"}
@@ -692,7 +708,7 @@ function BidProductPage() {
                         )}
                         <form onSubmit={handleSubmit} className="space-y-3">
                             <input
-                                type="number"
+                                type="text"
                                 min={art.price}
                                 step="1000"
                                 name="offerPrice"

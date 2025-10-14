@@ -2,6 +2,13 @@ import React, { useState, useEffect } from "react";
 import AdminSidebar from "../components/AdminSlidebar";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { createClient } from "@supabase/supabase-js";
+
+// Initialize Supabase client
+const supabase = createClient(
+  "https://usqyksnfpxftkpqkkguo.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InVzcXlrc25mcHhmdGtwcWtrZ3VvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAzNTkwNTgsImV4cCI6MjA3NTkzNTA1OH0.q5VI7dITm8wyVkYj0dw-kvoc48cVWkbHKk-isSmlZuc"
+);
 
 const STATUS_OPTIONS = ["Direct Sale", "Bid", "Not Listed"];
 const COLLECTION_OPTIONS = [
@@ -141,13 +148,7 @@ function AdminArtManagement() {
       }
     }
 
-    if (data.image && data.image.trim()) {
-      try {
-        new URL(data.image);
-      } catch {
-        errors.image = "Please enter a valid URL";
-      }
-    }
+    if (!data.image) errors.image = "Image is required";
 
     if (!STATUS_OPTIONS.includes(data.status)) {
       errors.status = "Invalid status";
@@ -229,24 +230,61 @@ function AdminArtManagement() {
     setAddModal(true);
   };
 
+  // Helper to upload image to Supabase
+  const uploadImageToSupabase = async (file) => {
+    if (!file) return null;
+
+    const ext = file.name.split(".").pop();
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}.${ext}`;
+
+    const { data, error } = await supabase.storage
+      .from("images") // Your bucket name
+      .upload(`public/${fileName}`, file, {
+        cacheControl: "3600",
+        upsert: false,
+      });
+
+    if (error) {
+      console.error("Supabase upload error:", error);
+      throw new Error(
+        error.message.includes("row-level security")
+          ? "Upload blocked by Supabase storage policy. Contact admin."
+          : `Upload failed: ${error.message}`
+      );
+    }
+
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("images").getPublicUrl(`public/${fileName}`);
+    return publicUrl;
+  };
+
   const handleEditClick = (art) => {
     setEditData({ ...art });
     setEditModal(true);
   };
 
-  const saveAdd = async (data) => {
+  const saveAdd = async (data, file) => {
     try {
       setLoading(true);
-      
-      const errors = validateArtData(data);
+
+      let finalData = { ...data };
+
+      if (file) {
+        const imageUrl = await uploadImageToSupabase(file);
+        finalData.image = imageUrl;
+      }
+
+      const errors = validateArtData(finalData);
       if (Object.keys(errors).length > 0) {
         const errorMessages = Object.values(errors).join('\n');
         alert("Please fix the following errors:\n\n" + errorMessages);
+        setLoading(false);
         return;
       }
 
       const processedData = {
-        ...data,
+        ...finalData,
         price: data.price ? parseFloat(data.price) : undefined,
         collections: data.collections || []
       };
@@ -262,30 +300,8 @@ function AdminArtManagement() {
         throw new Error(errorData.message || `HTTP error! status: ${res.status}`);
       }
 
-      const newData = await res.json();
-      setArtworks((prev) => [newData, ...prev]);
-
-      if (newData.status === "Bid") {
-        try {
-          const sessionBody = {
-            artId: newData._id,
-            startingPrice: newData.price || 0,
-            bidEndDate: newData.bidEndDate,
-            bidEndTime: newData.bidEndTime,
-          };
-          const biddingRes = await fetch("http://localhost:5000/api/bidding", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(sessionBody),
-          });
-          
-          if (!biddingRes.ok) {
-            console.warn("Failed to create bidding session");
-          }
-        } catch (biddingError) {
-          console.warn("Bidding session creation failed:", biddingError);
-        }
-      }
+      // Reload to get the latest state, which is more reliable with sorting.
+      await loadArtworks();
 
       setAddModal(false);
       alert("Artwork added successfully!");
@@ -297,25 +313,31 @@ function AdminArtManagement() {
     }
   };
 
-  const saveEdit = async (data) => {
+  const saveEdit = async (data, file) => {
     try {
       setLoading(true);
-      
-      const errors = validateArtData(data);
+
+      let finalData = { ...data };
+
+      // If a new file is provided, upload it and get the new URL
+      if (file) {
+        const imageUrl = await uploadImageToSupabase(file);
+        finalData.image = imageUrl;
+      }
+
+      const errors = validateArtData(finalData);
       if (Object.keys(errors).length > 0) {
         const errorMessages = Object.values(errors).join('\n');
         alert("Please fix the following errors:\n\n" + errorMessages);
+        setLoading(false);
         return;
       }
 
       const processedData = {
-        ...data,
-        price: data.price ? parseFloat(data.price) : undefined,
-        collections: data.collections || []
+        ...finalData,
+        price: finalData.price ? parseFloat(finalData.price) : undefined,
+        collections: finalData.collections || []
       };
-
-      console.log("Original data:", data);
-      console.log("Processed data being sent:", processedData);
 
       const res = await fetch(`${API_BASE}/${data._id}`, {
         method: "PUT",
@@ -323,42 +345,9 @@ function AdminArtManagement() {
         body: JSON.stringify(processedData),
       });
 
-      console.log("Response status:", res.status);
-      console.log("Response ok:", res.ok);
-
       if (!res.ok) {
         const errorText = await res.text();
-        console.log("Error response:", errorText);
         throw new Error(`HTTP error! status: ${res.status}, message: ${errorText}`);
-      }
-
-      const updatedData = await res.json();
-      console.log("Updated data received from server:", updatedData);
-
-      setArtworks((prev) =>
-        prev.map((a) => (a._id === updatedData._id ? updatedData : a))
-      );
-
-      if (updatedData.status === "Bid") {
-        try {
-          const sessionBody = {
-            artId: updatedData._id,
-            startingPrice: updatedData.price || 0,
-            bidEndDate: updatedData.bidEndDate,
-            bidEndTime: updatedData.bidEndTime,
-          };
-          const biddingRes = await fetch("http://localhost:5000/api/bidding", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(sessionBody),
-          });
-          
-          if (!biddingRes.ok) {
-            console.warn("Failed to create bidding session");
-          }
-        } catch (biddingError) {
-          console.warn("Bidding session creation failed:", biddingError);
-        }
       }
 
       setEditModal(false);
@@ -446,6 +435,9 @@ function AdminArtManagement() {
       ...initialData
     }));
     const [errors, setErrors] = useState({});
+    // File handling state
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [filePreview, setFilePreview] = useState(initialData?.image || null);
 
     const toggleModalCollection = (collection) => {
       setModalData((prev) => ({
@@ -456,13 +448,39 @@ function AdminArtManagement() {
       }));
     };
 
+    const handleFileChange = (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      // Client-side validation
+      const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+      if (!allowedTypes.includes(file.type)) {
+        setErrors(prev => ({ ...prev, image: "Only JPEG, PNG, GIF, or WebP files are allowed." }));
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) { // 5 MB limit
+        setErrors(prev => ({ ...prev, image: "File size must be ≤ 5 MB." }));
+        return;
+      }
+
+      setSelectedFile(file);
+      setFilePreview(URL.createObjectURL(file));
+      setErrors(prev => ({ ...prev, image: "" })); // Clear image error
+    };
+
     const handleSave = () => {
-      const validationErrors = validateArtData(modalData);
+      const dataToValidate = { ...modalData };
+      if (selectedFile) {
+        // If a new file is selected, satisfy the image requirement for validation.
+        dataToValidate.image = "file-present"; // Use a placeholder to pass validation
+      }
+
+      const validationErrors = validateArtData(dataToValidate);
       if (Object.keys(validationErrors).length > 0) {
         setErrors(validationErrors);
         return;
       }
-      onSave(modalData);
+      onSave(modalData, selectedFile);
     };
 
     return (
@@ -658,7 +676,6 @@ function AdminArtManagement() {
                   value={modalData.status || "Not Listed"}
                   onChange={(e) => {
                     const newStatus = e.target.value;
-                    console.log("Status changing from", modalData.status, "to", newStatus);
                     
                     setModalData(prev => {
                       const updated = { ...prev, status: newStatus };
@@ -666,7 +683,6 @@ function AdminArtManagement() {
                         updated.bidEndDate = "";
                         updated.bidEndTime = "";
                       }
-                      console.log("Modal data updated with new status:", updated.status);
                       return updated;
                     });
                     
@@ -749,35 +765,30 @@ function AdminArtManagement() {
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Image URL
+                  Artwork Image *
                 </label>
+                {filePreview && (
+                  <div className="mt-3 mb-3">
+                    <img
+                      src={filePreview}
+                      alt="Preview"
+                      className="w-32 h-32 object-cover rounded-md border border-gray-300 shadow-sm"
+                      onError={() => setFilePreview(null)} // Hide if URL is broken
+                    />
+                  </div>
+                )}
                 <input
-                  type="url"
-                  value={modalData.image || ""}
-                  onChange={(e) => {
-                    setModalData(prev => ({ ...prev, image: e.target.value }));
-                    if (errors.image) setErrors(prev => ({ ...prev, image: "" }));
-                  }}
+                  type="file"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  onChange={handleFileChange}
                   className={`w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-black focus:border-black ${
                     errors.image ? "border-red-500" : "border-gray-300"
-                  }`}
-                  placeholder="https://example.com/image.jpg"
+                  } file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-black file:text-white hover:file:bg-gray-800`}
                 />
                 {errors.image && (
                   <p className="text-red-500 text-sm mt-1">{errors.image}</p>
                 )}
-                {modalData.image && (
-                  <div className="mt-3">
-                    <img
-                      src={modalData.image}
-                      alt="Preview"
-                      className="w-32 h-32 object-cover rounded-md border border-gray-300 shadow-sm"
-                      onError={(e) => {
-                        e.target.style.display = "none";
-                      }}
-                    />
-                  </div>
-                )}
+                <p className="text-xs text-gray-500 mt-1">Max 5MB. Recommended: JPG, PNG, WebP.</p>
               </div>
 
               <div>
