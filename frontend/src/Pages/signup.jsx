@@ -86,6 +86,9 @@ function Signup() {
 
     // 3️⃣ Save login data to localStorage
     localStorage.setItem("user", JSON.stringify(loginRes.data));
+    // 3️⃣ Save token and user object separately to localStorage
+    localStorage.setItem("token", loginRes.data.token);
+    localStorage.setItem("user", JSON.stringify(loginRes.data.user));
 
     // 4️⃣ Navigate to homepage
     navigate("/");

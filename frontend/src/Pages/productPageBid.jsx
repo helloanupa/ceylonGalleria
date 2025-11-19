@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import jsPDF from "jspdf";
+import { useAuth } from "./useAuth";
 
 const bidRules = [
   {
@@ -56,7 +57,7 @@ function BidProductPage() {
   const [submittedBid, setSubmittedBid] = useState(null);
   const [pdfGenerating, setPdfGenerating] = useState(false);
 
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const user = useAuth();
 
   const allChecked = checkedRules.every(Boolean);
 
@@ -197,15 +198,6 @@ function BidProductPage() {
     }
   }, [id, navigate]);
 
-  useEffect(() => {
-    const user = localStorage.getItem('user');
-    if (user) {
-      setIsLoggedIn(true);
-    } else {
-      setIsLoggedIn(false);
-    }
-  }, []);
-
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
     if (bidError) setBidError(null);
@@ -264,6 +256,11 @@ function BidProductPage() {
   };
 
   const generateBidConfirmationPDF = async () => {
+    if (!submittedBid || !art) {
+        console.error("Missing bid or art data for PDF generation.");
+        alert("Cannot generate PDF due to missing data. Please try again.");
+        return;
+    }
     try {
       setPdfGenerating(true);
       const doc = new jsPDF("p", "mm", "a4");
@@ -275,7 +272,7 @@ function BidProductPage() {
       const addText = (text, x, y, options = {}) => {
         const { fontSize = 10, fontStyle = "normal", align = "left" } = options;
         doc.setFontSize(fontSize);
-        doc.setFont("helvetica", fontStyle);
+        doc.setFont(undefined, fontStyle);
         doc.text(text, x, y, { align });
       };
 
@@ -299,7 +296,6 @@ function BidProductPage() {
       });
 
       currentY += 10;
-      const currentDate = new Date();
       const formatUTCDateTime = () => {
         const rightNow = new Date();
         const year = rightNow.getUTCFullYear();
@@ -317,7 +313,7 @@ function BidProductPage() {
         align: "center",
       });
       currentY += 6;
-      addText(`Bid Reference: ${submittedBid.bidId}`, pageWidth / 2, currentY, {
+      addText(`Bid Reference: ${submittedBid.bidId || "N/A"}`, pageWidth / 2, currentY, {
         fontSize: 8,
         align: "center",
       });
@@ -379,10 +375,10 @@ function BidProductPage() {
       currentY += 20;
 
       const bidDetails = [
-        ["Bidder Name:", submittedBid.name],
-        ["Contact Information:", submittedBid.contact],
-        ["Bid Reference Number:", submittedBid.bidId],
-        ["Submission Date & Time:", submittedBid.submittedAt.toLocaleString()],
+        ["Bidder Name:", submittedBid.name || 'N/A'],
+        ["Contact Information:", submittedBid.contact || 'N/A'],
+        ["Bid Reference Number:", submittedBid.bidId || 'N/A'],
+        ["Submission Date & Time:", submittedBid.submittedAt?.toLocaleString() || 'N/A'],
         ["Status:", "Successfully Submitted"],
       ];
       bidDetails.forEach(([label, value]) => {
@@ -463,7 +459,7 @@ function BidProductPage() {
       );
 
       const cleanTitle = (art.title || "Artwork").replace(/[^a-zA-Z0-9]/g, "_");
-      const timestamp = currentDate.toISOString().slice(0, 19).replace(/[-:T]/g, "");
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "");
       const fileName = `Ceylon_Galleria_Bid_Confirmation_${cleanTitle}_${timestamp}.pdf`;
       doc.save(fileName);
     } catch (error) {
@@ -476,7 +472,7 @@ function BidProductPage() {
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
-    if (!isLoggedIn) {
+    if (!user) {
         setBidError("You must be logged in to submit a bid.");
         return;
     }
@@ -638,7 +634,7 @@ function BidProductPage() {
 
             {art.status === "Bid" && (
               <div>
-                {isLoggedIn ? (
+                {user ? (
                   <button
                     onClick={handleOpenBidModal}
                     className="mt-4 w-full py-3 bg-black text-white font-semibold hover:bg-gray-800 transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98]"
@@ -663,7 +659,7 @@ function BidProductPage() {
           </div>
         </div>
 
-        {isLoggedIn && (
+        {user && (
             <div
                 className={`overflow-hidden transition-all duration-500 ease-in-out ${
                     isModalOpen ? "max-h-[2000px] opacity-100 mt-6" : "max-h-0 opacity-0"

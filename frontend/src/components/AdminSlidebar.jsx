@@ -51,7 +51,6 @@ function AdminSidebar({ onLogout }) {
           <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center mb-3">
             <span className="text-white font-bold text-xl">A</span>
           </div>
-          <h2 className="text-lg font-bold text-gray-800">{storedUser.name}</h2>
           <p className="text-sm text-gray-600">Administrator</p>
         </div>
 

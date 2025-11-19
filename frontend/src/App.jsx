@@ -7,6 +7,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import HomePage from "./Pages/home.jsx";
 import SignUp from "./Pages/signup.jsx";
 import SignIn from "./Pages/signin.jsx";
+import ForgotPassword from "./Pages/ForgotPassword.jsx"; // Import ForgotPassword page
+import ResetPassword from "./Pages/ResetPassword.jsx"; // Import ResetPassword page
 import Dashboard from "./Pages/about.jsx";
 
 import Exhibitions from "./Pages/exhibition.jsx";
@@ -48,6 +50,14 @@ function AnimatedRoutes() {
         <Route
           path="/signin"
           element={<motion.div {...pageTransition}><SignIn /></motion.div>}
+        />
+        <Route
+          path="/forgot-password"
+          element={<motion.div {...pageTransition}><ForgotPassword /></motion.div>}
+        />
+        <Route
+          path="/reset-password/:token"
+          element={<motion.div {...pageTransition}><ResetPassword /></motion.div>}
         />
         <Route
           path="/about"

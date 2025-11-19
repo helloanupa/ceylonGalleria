@@ -340,35 +340,50 @@ function OrderManagement() {
   };
 
   const generatePDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(18);
-    doc.text("SFG Gallery - Order Report", 14, 22);
+    const doc = new jsPDF({ orientation: "landscape" });
+    const now = new Date();
+
+    doc.setFontSize(20);
+    doc.text("CEYLON GALLERIA", 14, 20);
+    doc.setFontSize(12);
+    doc.text("Order & Tracking Report", 14, 28);
+    doc.setProperties({
+      subject: "Order & Tracking Report"
+    });
+
+    doc.setFontSize(10);
+    doc.text(`Report Generated On: ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`, 14, 34);
 
     autoTable(doc, {
-      startY: 30,
+      startY: 40,
       head: [
         [
           "Art Code",
           "Art Title",
           "Customer",
           "Sell Type",
+          "Phone Number",
           "Status",
           "Order Date",
-          "Amount",
+          "Total Amount",
         ],
       ],
       body: orders.map((o) => [
-        o.artCode,
-        o.artTitle,
-        o.fullName,
-        o.sellType,
-        o.status,
-        o.orderDate,
-        o.totalAmount,
+        o.artCode || "-",
+        o.artTitle || "-",
+        o.fullName || "-",
+        o.sellType || "-",
+        o.phoneNumber || "-",
+        o.status || "-",
+        o.orderDate ? new Date(o.orderDate).toLocaleDateString() : "-",
+        o.totalAmount ? `LKR ${parseFloat(o.totalAmount).toLocaleString()}` : "-",
       ]),
+      styles: { fontSize: 9, cellPadding: 3, overflow: 'linebreak' },
+      headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
+      alternateRowStyles: { fillColor: [240, 240, 240] },
     });
 
-    doc.save("Order_Report.pdf");
+    doc.save(`Order_Report_${now.toISOString().split('T')[0]}.pdf`);
   };
 
   const isPdfUrl = (url = "") =>

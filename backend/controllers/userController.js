@@ -1,6 +1,8 @@
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
+const bcrypt = require("bcryptjs");
+const crypto = require("crypto");
 
 //register
 exports.register = async (req, res) => {
@@ -22,18 +24,28 @@ exports.register = async (req, res) => {
     return res.status(400).json({ error: "Invalid phone number" });
 
   try {
+    // Check if user already exists
+    let user = await User.findOne({ gmail });
+    if (user) {
+      return res.status(400).json({ error: "User with this email already exists" });
+    }
+
+    // Hash the password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
     const newUser = new User({
       name,
       gmail,
-      password, // plain text
+      password: hashedPassword,
       phone,
       country,
       role: role || "user",
       profileImage: profileImage || "",
     });
 
-    const saved = await newUser.save();
-    res.status(201).json(saved);
+    await newUser.save();
+    res.status(201).json({ message: "User registered successfully" });
   } catch (err) {
     res.status(500).json({ error: "Registration failed" });
   }
@@ -51,13 +63,39 @@ exports.register = async (req, res) => {
 
   try {
     const user = await User.findOne({ gmail });
-    if (!user || user.password !== password) {
+    if (!user) {
       return res.status(400).json({ error: "Invalid email or password." });
     }
 
-    res.status(200).json(user);
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: "Invalid email or password." });
+    }
+
+    // Create and sign a JWT
+    const payload = {
+      user: {
+        id: user.id,
+        role: user.role,
+      },
+    };
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1h" });
+
+    res.status(200).json({ token, user });
   } catch (error) {
     res.status(500).json({ error: "Server error during login." });
+  }
+};
+
+ // Get Current User Profile
+ exports.getCurrentUserProfile = async (req, res) => {
+  // The `protect` middleware already found the user from the token
+  // and attached it to `req.user`. We just need to send it back.
+  if (req.user) {
+    res.json(req.user);
+  } else {
+    res.status(404).json({ error: "User not found" });
   }
 };
 
@@ -73,18 +111,28 @@ exports.register = async (req, res) => {
 
  // Update Profile
  exports.updateProfile = async (req, res) => {
-  try {
-    const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true });
-    res.json(user);
-  } catch (err) {
-    res.status(500).json({ error: "Update failed" });
-  }
-};
+    try {
+      // Use req.user.id from the 'protect' middleware, not req.params.id
+      const user = await User.findById(req.user.id);
+
+      if (user) {
+        // Update fields from req.body
+        Object.assign(user, req.body);
+        const updatedUser = await user.save();
+        res.json(updatedUser);
+      } else {
+        res.status(404).json({ error: "User not found" });
+      }
+    } catch (err) {
+      res.status(500).json({ error: "Update failed" });
+    }
+  };
 
  // Delete Profile
  exports.deleteProfile = async (req, res) => {
   try {
-    await User.findByIdAndDelete(req.params.id);
+    // Use req.user.id from the 'protect' middleware
+    await User.findByIdAndDelete(req.user.id);
     res.json({ message: "User deleted" });
   } catch (err) {
     res.status(500).json({ error: "Delete failed" });
@@ -137,18 +185,23 @@ exports.register = async (req, res) => {
 
     if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Generate simple reset token
-    const resetToken = Math.random().toString(36).substring(2, 15);
+    // Generate secure reset token
+    const resetToken = crypto.randomBytes(20).toString("hex");
 
-    user.resetPasswordToken = resetToken;
+    // Hash token and set to user
+    user.resetPasswordToken = crypto
+      .createHash("sha256")
+      .update(resetToken)
+      .digest("hex");
+
     user.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 min
     await user.save();
 
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
-        user: "tharindun979@gmail.com",
-        pass: "uoboxsrrhohoadwf",
+        user: process.env.EMAIL_USER, // Use environment variables
+        pass: process.env.EMAIL_PASS, // Use environment variables
       },
     });
 
@@ -189,17 +242,24 @@ exports.resetPassword = async (req, res) => {
         .json({ message: "Password and confirm password do not match" });
     }
 
+    // Hash the token from the URL to compare with the one in the DB
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(token)
+      .digest("hex");
+
     // Find user with valid token
     const user = await User.findOne({
-      resetPasswordToken: token,
+      resetPasswordToken: hashedToken,
       resetPasswordExpire: { $gt: Date.now() },
     });
 
     if (!user)
       return res.status(400).json({ message: "Invalid or expired token" });
 
-    // Save new password  
-    user.password = password;
+    // Hash new password and save
+    const salt = await bcrypt.genSalt(10);
+    user.password = await bcrypt.hash(password, salt);
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
 

@@ -29,11 +29,12 @@ function SignIn() {
         form
       );
 
-      // Save user to localStorage
-      localStorage.setItem("user", JSON.stringify(res.data));
+      // Save token and user object separately to localStorage
+      localStorage.setItem("token", res.data.token);
+      localStorage.setItem("user", JSON.stringify(res.data.user));
 
       // Redirect based on role
-      if (res.data.role === "admin") {
+      if (res.data.user.role === "admin") {
         navigate("/admin");
       } else {
         navigate("/");

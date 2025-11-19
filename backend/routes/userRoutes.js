@@ -1,21 +1,34 @@
 const express = require("express");
 const router = express.Router();
-const userController = require("../controllers/userController");
+const {
+  register,
+  login,
+  getCurrentUserProfile,
+  getProfile,
+  updateProfile,
+  deleteProfile,
+  getAllUsers,
+  updateUserByAdmin,
+  deleteUserByAdmin,
+  forgotPassword,
+  resetPassword,
+} = require("../controllers/userController");
+const { protect } = require("../middleware/authMiddleware");
 
-router.post("/register", userController.register);
-router.post("/login", userController.login);
-router.get("/profile/:id", userController.getProfile);
-router.put("/profile/:id", userController.updateProfile);
-router.delete("/profile/:id", userController.deleteProfile);
-router.get("/all", userController.getAllUsers);
+// Auth routes
+router.post("/register", register);
+router.post("/login", login);
+router.post("/forgot-password", forgotPassword);
+router.put("/reset-password/:token", resetPassword);
 
-router.put("/admin/:id", userController.updateUserByAdmin);
-router.delete("/admin/:id", userController.deleteUserByAdmin);
+// Secure routes for the logged-in user to manage their OWN profile
+router.get("/profile", protect, getCurrentUserProfile);
+router.put("/profile", protect, updateProfile);
+router.delete("/profile", protect, deleteProfile);
 
-// userRoutes.js
-router.post("/forgot-password", userController.forgotPassword);
-router.post("/reset-password/:token", userController.resetPassword);
-
- 
+// Admin-specific routes for managing all users
+router.get("/admin/all", getAllUsers);
+router.put("/admin/:id", updateUserByAdmin);
+router.delete("/admin/:id", deleteUserByAdmin);
 
 module.exports = router;

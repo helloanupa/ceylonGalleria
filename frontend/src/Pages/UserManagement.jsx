@@ -6,6 +6,7 @@ import axios from "axios";
 
 function UserManagement() {
   const [users, setUsers] = useState([]);
+  const [admins, setAdmins] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [editingUser, setEditingUser] = useState(null);
@@ -24,11 +25,19 @@ function UserManagement() {
 
   const fetchUsers = async () => {
     try {
-      const response = await axios.get("http://localhost:5000/api/users/all");
-      const sortedUsers = response.data.sort(
+      const response = await axios.get("http://localhost:5000/api/users/admin/all");
+      const allUsers = response.data;
+
+      // Separate admins and regular users
+      const adminUsers = allUsers.filter(user => user.role === 'admin');
+      const nonAdminUsers = allUsers.filter(user => user.role !== 'admin');
+
+      // Sort regular users
+      const sortedUsers = nonAdminUsers.sort(
         (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
       );
       setUsers(sortedUsers);
+      setAdmins(adminUsers);
     } catch (error) {
       console.error("Error fetching users:", error);
     } finally {
@@ -203,6 +212,35 @@ function UserManagement() {
           </button>
         </div>
 
+        {/* Administrators Section */}
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4">Administrators</h2>
+          <div className="overflow-x-auto bg-white shadow-md rounded-lg border border-gray-200">
+            <table className="min-w-full divide-y divide-gray-300">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="px-4 py-2 text-left text-sm font-medium">Name</th>
+                  <th className="px-4 py-2 text-left text-sm font-medium">Email</th>
+                  <th className="px-4 py-2 text-left text-sm font-medium">Member Since</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {admins.map((admin) => (
+                  <tr key={admin._id} className="bg-yellow-50 hover:bg-yellow-100">
+                    <td className="px-4 py-2 font-medium">{admin.name}</td>
+                    <td className="px-4 py-2">{admin.gmail}</td>
+                    <td className="px-4 py-2">
+                      {new Date(admin.createdAt).toLocaleDateString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Regular Users Section */}
+        <h2 className="text-xl font-semibold mb-4">Registered Users</h2>
         <div className="mb-4">
           <input
             type="text"

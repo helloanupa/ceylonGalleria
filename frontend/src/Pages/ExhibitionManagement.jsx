@@ -110,11 +110,50 @@ function ExhibitionManagement() {
   };
 
   const validateFields = () => {
+    const { title, description, startdate, enddate, starttime, endtime, venue, status } = editData;
     const newErrors = {};
-    if (!editData.title) newErrors.title = "Title is required";
-    if (!editData.startdate) newErrors.startdate = "Start Date is required";
-    if (!editData.enddate) newErrors.enddate = "End Date is required";
-    if (!editData.venue) newErrors.venue = "Venue is required";
+
+    if (!title || title.trim().length < 3) {
+      newErrors.title = "Title must be at least 3 characters long.";
+    }
+    if (!description || description.trim().length < 10) {
+      newErrors.description = "Description must be at least 10 characters long.";
+    }
+    if (!startdate) {
+      newErrors.startdate = "Start Date is required.";
+    }
+    if (!enddate) {
+      newErrors.enddate = "End Date is required.";
+    }
+    if (startdate && enddate && new Date(startdate) > new Date(enddate)) {
+      newErrors.enddate = "End Date cannot be before Start Date.";
+    }
+
+    // New Validation: If dates are the same, end time must be after start time
+    if (startdate && enddate && starttime && endtime && startdate === enddate) {
+      if (starttime >= endtime) {
+        newErrors.endtime = "End time must be after start time on the same day.";
+      }
+    }
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize to the start of today
+
+    if (status === 'upcoming' && startdate) {
+      const exhibitionStartDate = new Date(startdate);
+      if (exhibitionStartDate < today) {
+        newErrors.startdate = "Start date for an 'upcoming' exhibition cannot be in the past.";
+      }
+    }
+
+    // New Validation: 'showing' exhibitions cannot have a past end date
+    if (status === 'showing' && enddate) {
+      const exhibitionEndDate = new Date(enddate);
+      if (exhibitionEndDate < today) {
+        newErrors.enddate = "End date for a 'showing' exhibition cannot be in the past.";
+      }
+    }
+    if (!venue || venue.trim().length < 3) newErrors.venue = "Venue must be at least 3 characters long.";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -168,39 +207,34 @@ function ExhibitionManagement() {
   };
 
   const generatePDF = () => {
-    const doc = new jsPDF();
+    const doc = new jsPDF({ orientation: "landscape" });
     const now = new Date();
 
     doc.setFontSize(20);
     doc.text("CEYLON GALLERIA", 14, 20);
     doc.setFontSize(12);
     doc.text("Exhibition Report", 14, 28);
+    doc.setProperties({
+      subject: "Exhibitions Report"
+    });
 
     doc.setFontSize(10);
     doc.text(`Report Generated On: ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`, 14, 34);
 
     autoTable(doc, {
       startY: 40,
-      head: [["Title", "Start", "End", "Status", "Venue", "Description"]],
+      head: [["Title", "Start Date", "End Date", "Status", "Venue", "Description"]],
       body: exhibitions.map((ex) => [
         ex.title || "-",
         ex.startdate ? new Date(ex.startdate).toLocaleDateString() : "-",
         ex.enddate ? new Date(ex.enddate).toLocaleDateString() : "-",
         ex.status || "-",
         ex.venue || "-",
-        ex.description?.substring(0, 100) + (ex.description?.length > 100 ? "..." : "") || "-",
+        ex.description || "-",
       ]),
-      styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+      styles: { fontSize: 9, cellPadding: 3, overflow: 'linebreak' },
       headStyles: { fillColor: [0, 0, 0], textColor: [255, 255, 255] },
       alternateRowStyles: { fillColor: [240, 240, 240] },
-      columnStyles: {
-        0: { cellWidth: 30 }, // Title
-        1: { cellWidth: 20 }, // Start
-        2: { cellWidth: 20 }, // End
-        3: { cellWidth: 15 }, // Status
-        4: { cellWidth: 30 }, // Venue
-        5: { cellWidth: 60 }, // Description
-      },
     });
 
     doc.save(`Exhibition_Report_${now.toISOString().split('T')[0]}.pdf`);
@@ -319,7 +353,7 @@ function ExhibitionManagement() {
                     type="text"
                     value={editData.image || ""}
                     onChange={(e) => handleEditChange("image", e.target.value)}
-                    className={`w-full px-3 py-2 border rounded ${errors.image ? "border-red-500" : "border-gray-300"}`}
+                    className="w-full px-3 py-2 border rounded border-gray-300 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                     placeholder="https://example.com/image.jpg"
                   />
                   {editData.image && <img src={editData.image} alt="Preview" className="w-32 h-32 object-cover rounded mt-2" />}
@@ -332,7 +366,7 @@ function ExhibitionManagement() {
                     type="text"
                     value={editData.title || ""}
                     onChange={(e) => handleEditChange("title", e.target.value)}
-                    className={`w-full px-3 py-2 border rounded ${errors.title ? "border-red-500" : "border-gray-300"}`}
+                    className={`w-full px-3 py-2 border rounded transition-all duration-300 focus:outline-none focus:ring-2 ${errors.title ? "border-red-500 ring-red-500" : "border-gray-300 focus:ring-indigo-500"}`}
                   />
                   {errors.title && <p className="text-red-500 text-sm mt-1">{errors.title}</p>}
                 </div>
@@ -345,7 +379,7 @@ function ExhibitionManagement() {
                       type="date"
                       value={editData.startdate?.split("T")[0] || ""}
                       onChange={(e) => handleEditChange("startdate", e.target.value)}
-                      className={`w-full px-3 py-2 border rounded ${errors.startdate ? "border-red-500" : "border-gray-300"}`}
+                      className={`w-full px-3 py-2 border rounded transition-all duration-300 focus:outline-none focus:ring-2 ${errors.startdate ? "border-red-500 ring-red-500" : "border-gray-300 focus:ring-indigo-500"}`}
                     />
                     {errors.startdate && <p className="text-red-500 text-sm mt-1">{errors.startdate}</p>}
                   </div>
@@ -355,7 +389,7 @@ function ExhibitionManagement() {
                       type="date"
                       value={editData.enddate?.split("T")[0] || ""}
                       onChange={(e) => handleEditChange("enddate", e.target.value)}
-                      className={`w-full px-3 py-2 border rounded ${errors.enddate ? "border-red-500" : "border-gray-300"}`}
+                      className={`w-full px-3 py-2 border rounded transition-all duration-300 focus:outline-none focus:ring-2 ${errors.enddate ? "border-red-500 ring-red-500" : "border-gray-300 focus:ring-indigo-500"}`}
                     />
                     {errors.enddate && <p className="text-red-500 text-sm mt-1">{errors.enddate}</p>}
                   </div>
@@ -365,13 +399,15 @@ function ExhibitionManagement() {
                 <div className="flex gap-2">
                   <div className="flex-1">
                     <label>Start Time</label>
-                    <input type="time" value={editData.starttime || ""} onChange={(e) => handleEditChange("starttime", e.target.value)} className="w-full px-3 py-2 border rounded" />
+                    <input type="time" value={editData.starttime || ""} onChange={(e) => handleEditChange("starttime", e.target.value)} className="w-full px-3 py-2 border rounded border-gray-300 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>
                   <div className="flex-1">
                     <label>End Time</label>
-                    <input type="time" value={editData.endtime || ""} onChange={(e) => handleEditChange("endtime", e.target.value)} className="w-full px-3 py-2 border rounded" />
+                    <input type="time" value={editData.endtime || ""} onChange={(e) => handleEditChange("endtime", e.target.value)} className="w-full px-3 py-2 border rounded border-gray-300 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                   </div>
+                  
                 </div>
+                {errors.endtime && <p className="text-red-500 text-sm mt-1">{errors.endtime}</p>}
 
                 {/* Venue */}
                 <div>
@@ -380,7 +416,7 @@ function ExhibitionManagement() {
                     type="text"
                     value={editData.venue || ""}
                     onChange={(e) => handleEditChange("venue", e.target.value)}
-                    className={`w-full px-3 py-2 border rounded ${errors.venue ? "border-red-500" : "border-gray-300"}`}
+                    className={`w-full px-3 py-2 border rounded transition-all duration-300 focus:outline-none focus:ring-2 ${errors.venue ? "border-red-500 ring-red-500" : "border-gray-300 focus:ring-indigo-500"}`}
                   />
                   {errors.venue && <p className="text-red-500 text-sm mt-1">{errors.venue}</p>}
                 </div>
@@ -391,7 +427,7 @@ function ExhibitionManagement() {
                   <select 
                     value={editData.status || "upcoming"} 
                     onChange={(e) => handleEditChange("status", e.target.value)} 
-                    className="w-full px-3 py-2 border rounded"
+                    className="w-full px-3 py-2 border rounded border-gray-300 transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
                     {STATUS_OPTIONS.map((opt) => (
                       <option key={opt} value={opt}>{opt}</option>
@@ -405,9 +441,10 @@ function ExhibitionManagement() {
                   <textarea 
                     value={editData.description || ""} 
                     onChange={(e) => handleEditChange("description", e.target.value)} 
-                    className="w-full px-3 py-2 border rounded" 
+                    className={`w-full px-3 py-2 border rounded transition-all duration-300 focus:outline-none focus:ring-2 ${errors.description ? "border-red-500 ring-red-500" : "border-gray-300 focus:ring-indigo-500"}`}
                     rows={4} 
                   />
+                  {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
                 </div>
               </div>
 
@@ -417,14 +454,14 @@ function ExhibitionManagement() {
                     addModal ? setAddModal(false) : setEditModal(false); 
                     setErrors({}); 
                   }} 
-                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400" 
+                  className="px-4 py-2 rounded bg-gray-300 hover:bg-gray-400 transition-colors duration-300"
                   disabled={loading}
                 >
                   Cancel
                 </button>
                 <button 
                   onClick={addModal ? saveAdd : saveEdit} 
-                  className="px-4 py-2 rounded bg-black text-white hover:bg-gray-800" 
+                  className="px-4 py-2 rounded bg-black text-white hover:bg-gray-800 transition-colors duration-300"
                   disabled={loading}
                 >
                   {loading ? "Saving..." : "Save"}

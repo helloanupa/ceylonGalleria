@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import axios from "axios";
+import { useAuth } from "./useAuth";
 
 function Profile() {
   const [isEditing, setIsEditing] = useState(false);
@@ -10,8 +11,7 @@ function Profile() {
   const [profileData, setProfileData] = useState(null);
   const [editData, setEditData] = useState({});
   const [loading, setLoading] = useState(true);
-
-  const user = JSON.parse(localStorage.getItem("user"));
+  const user = useAuth();
 
   // This is the new code to change the tab title
   useEffect(() => {
@@ -20,11 +20,22 @@ function Profile() {
 
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!user) return;
+      // Get the token from localStorage
+      const token = localStorage.getItem("token");
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+
       try {
-        const res = await axios.get(
-          `http://localhost:5000/api/users/profile/${user._id}`
-        );
+        // Create the authorization header
+        const config = {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        };
+        // Use the new, secure endpoint
+        const res = await axios.get("http://localhost:5000/api/users/profile", config);
         setProfileData(res.data);
 
         // Only set editData if it's empty (initial load)
@@ -41,12 +52,21 @@ function Profile() {
       }
     };
     fetchProfile();
-  }, [user]);
+  }, [user?.gmail]); // Re-fetch when user changes. Using a specific field like gmail.
 
   const handleEditToggle = async () => {
     if (isEditing) {
       // Save changes
       try {
+        const token = localStorage.getItem("token");
+        if (!token) {
+          alert("You are not logged in.");
+          return;
+        }
+        const config = {
+          headers: { Authorization: `Bearer ${token}` },
+        };
+
         const updatePayload = {
           name: editData.name,
           gmail: editData.gmail,
@@ -54,9 +74,11 @@ function Profile() {
         };
         if (editData.password) updatePayload.password = editData.password;
 
+        // Use the new, secure endpoint for updating
         const res = await axios.put(
-          `http://localhost:5000/api/users/profile/${user._id}`,
-          updatePayload
+          `http://localhost:5000/api/users/profile`, // No ID needed anymore
+          updatePayload,
+          config
         );
 
         setProfileData(res.data);
@@ -88,9 +110,19 @@ function Profile() {
 
   const handleDeleteAccount = async () => {
     if (!deleteAgreed) return;
+    const token = localStorage.getItem("token");
+    if (!token) {
+      alert("You are not logged in.");
+      return;
+    }
+    const config = {
+      headers: { Authorization: `Bearer ${token}` },
+    };
+
     try {
-      await axios.delete(`http://localhost:5000/api/users/profile/${user._id}`);
+      await axios.delete(`http://localhost:5000/api/users/profile`, config); // No ID needed anymore
       alert("Account deleted successfully!");
+      window.dispatchEvent(new Event("storage")); // Notify other components of logout
       localStorage.removeItem("user");
       window.location.href = "/signin";
     } catch (err) {

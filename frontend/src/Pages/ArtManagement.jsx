@@ -367,7 +367,7 @@ function AdminArtManagement() {
     const now = new Date();
     
     doc.setFontSize(16);
-    doc.text("SFG Gallery - Art Report", 14, 20);
+    doc.text(" Ceylon Galleria - Art Report", 14, 20);
     doc.setFontSize(10);
     doc.text(`Generated: ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`, 14, 28);
     

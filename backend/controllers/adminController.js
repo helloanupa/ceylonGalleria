@@ -1,4 +1,6 @@
 const Admin = require("../models/Admin");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
 // Register Admin
 exports.register = async (req, res) => {
@@ -31,8 +33,12 @@ exports.register = async (req, res) => {
       return res.status(400).json({ error: "Admin already exists." });
     }
 
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+
     // Save admin
-    const newAdmin = new Admin({ name, gmail, password });
+    const newAdmin = new Admin({ name, gmail, password: hashedPassword });
     const savedAdmin = await newAdmin.save();
 
     res
@@ -54,11 +60,24 @@ exports.login = async (req, res) => {
   try {
     const admin = await Admin.findOne({ gmail });
 
-    if (!admin || admin.password !== password) {
+    if (!admin) {
       return res.status(401).json({ error: "Invalid credentials." });
     }
 
-    res.status(200).json({ message: "Admin login successful", admin });
+    const isMatch = await bcrypt.compare(password, admin.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: "Invalid credentials." });
+    }
+
+    // Create and sign a JWT for the admin
+    const payload = {
+      admin: {
+        id: admin.id,
+      },
+    };
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: "1h" }); // Using JWT_SECRET from .env
+    res.status(200).json({ message: "Admin login successful", token, admin });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Server error during admin login." });
