@@ -4,7 +4,7 @@ const cors = require("cors");
 const path = require("path");
 const http = require("http");
 const { Server } = require("socket.io");
-require("dotenv").config();
+require("dotenv").config(); // For environment variables
 
 // Import Routes
 const userRoutes = require("./routes/userRoutes");
@@ -43,10 +43,12 @@ const io = new Server(server, {
   },
 });
 
+
 mongoose
   .connect(MONGO_URI)
   .then(() => {
     console.log("✅ MongoDB Connected");
+    // Start the server only after a successful database connection
     server.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
   })
   .catch((err) => {
@@ -57,9 +59,7 @@ mongoose
 // Serve static files for production
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "client/build")));
-
-  // 🔥 FIXED WILDCARD ROUTE
-  app.get("(.*)", (req, res) => {
+  app.get("*", (req, res) => {
     res.sendFile(path.join(__dirname, "client/build", "index.html"));
   });
 }
