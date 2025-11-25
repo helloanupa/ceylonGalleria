@@ -17,9 +17,9 @@ const orderRoutes = require("./routes/orderRoutes");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// -------------------------
-// Safe API_BASE
-// -------------------------
+// ----------------------------------
+// Safe API_BASE (Avoid invalid .env)
+// ----------------------------------
 let API_BASE = process.env.API_BASE;
 if (!API_BASE || !API_BASE.startsWith("/") || API_BASE.includes("http")) {
   API_BASE = "/api";
@@ -39,19 +39,20 @@ app.use(`${API_BASE}/exhibitions`, exhibitionRoutes);
 app.use(`${API_BASE}/bidding`, biddingRoutes);
 app.use(`${API_BASE}/orders`, orderRoutes);
 
-// MongoDB connection
+// MongoDB connection validation
 const MONGO_URI = process.env.MONGO_URI;
 if (!MONGO_URI || (MONGO_URI.includes("http") && MONGO_URI.startsWith("https://git.new"))) {
   console.error("❌ Invalid MONGO_URI in .env! Please fix it.");
   process.exit(1);
 }
 
+// Connect to database
 mongoose
   .connect(MONGO_URI)
   .then(() => {
     console.log("✅ MongoDB Connected");
 
-    // HTTP server + Socket.IO
+    // Start server with Socket.IO
     const server = http.createServer(app);
     const io = new Server(server, {
       cors: {
@@ -72,11 +73,16 @@ mongoose
     process.exit(1);
   });
 
-// Serve React build in production
+// ------------------------------------------------------
+// PRODUCTION: Serve React build (FIXED WILDCARD ROUTE)
+// ------------------------------------------------------
 if (process.env.NODE_ENV === "production") {
   const clientBuildPath = path.join(__dirname, "client/build");
   app.use(express.static(clientBuildPath));
-  app.get("*", (req, res) => {
+
+  // FIXED — Express 5 requires "/*" instead of "*"
+  app.get("/*", (req, res) => {
     res.sendFile(path.join(clientBuildPath, "index.html"));
   });
 }
+
